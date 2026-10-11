@@ -10,5 +10,11 @@
     "noEmit": true,
     "types": ["vite/client", "node"]
   },
-  "include": ["src", "adapter", "vite.config.ts", "convex/server-build.d.ts"]
+  "include": [
+    "src",
+    "adapter",
+    "scripts",
+    "vite.config.ts",
+    "convex/server-build.d.ts"
+  ]
 }
