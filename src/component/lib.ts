@@ -336,11 +336,9 @@ export const cleanupPendingStorage = internalMutation({
       .withIndex("by_expiresAt", (q) => q.lte("expiresAt", Date.now()))
       .take(batchLimit);
     for (const asset of expired) {
-      if (asset.storageId) {
-        await ctx.db.insert("pendingStorageCleanup", {
-          storageId: asset.storageId,
-        });
-      }
+      await ctx.db.insert("pendingStorageCleanup", {
+        storageId: asset.storageId,
+      });
       await ctx.db.delete("retiredAssets", asset._id);
     }
     const entries = await ctx.db
@@ -348,31 +346,19 @@ export const cleanupPendingStorage = internalMutation({
       .take(batchLimit);
     let deleted = 0;
     for (const entry of entries) {
-      const [liveReference, stagedReference, retiredReference] =
-        await Promise.all([
-          ctx.db
-            .query("staticAssets")
-            .withIndex("by_storageId", (q) =>
-              q.eq("storageId", entry.storageId),
-            )
-            .first(),
-          ctx.db
-            .query("stagedAssets")
-            .withIndex("by_storageId", (q) =>
-              q.eq("storageId", entry.storageId),
-            )
-            .first(),
-          ctx.db
-            .query("retiredAssets")
-            .withIndex("by_storageId", (q) =>
-              q.eq("storageId", entry.storageId),
-            )
-            .first(),
-        ]);
+      const [liveReference, stagedReference] = await Promise.all([
+        ctx.db
+          .query("staticAssets")
+          .withIndex("by_storageId", (q) => q.eq("storageId", entry.storageId))
+          .first(),
+        ctx.db
+          .query("stagedAssets")
+          .withIndex("by_storageId", (q) => q.eq("storageId", entry.storageId))
+          .first(),
+      ]);
       if (
         !liveReference &&
         !stagedReference &&
-        !retiredReference &&
         (await deleteStorageFile(ctx, entry.storageId))
       ) {
         deleted++;
@@ -553,20 +539,11 @@ export const cleanupAbandonedStaging = internalMutation({
     let queuedBlobIds = 0;
     for (const asset of assets) {
       if (asset.storageId) {
-        const storageId = asset.storageId;
         const liveReference = await ctx.db
           .query("staticAssets")
           .withIndex("by_storageId", (q) => q.eq("storageId", asset.storageId))
           .first();
-        const retiredReference = await ctx.db
-          .query("retiredAssets")
-          .withIndex("by_storageId", (q) => q.eq("storageId", storageId))
-          .first();
-        if (
-          !liveReference &&
-          !retiredReference &&
-          (await deleteStorageFile(ctx, asset.storageId))
-        ) {
+        if (!liveReference && (await deleteStorageFile(ctx, asset.storageId))) {
           deletedFiles++;
         }
       }
