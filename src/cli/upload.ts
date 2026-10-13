@@ -27,6 +27,7 @@ import {
   MAX_CONVEX_ARGUMENT_BYTES,
 } from "./argumentChunks.js";
 import { parseUploadArgs } from "./args.js";
+import { buildEnvironment } from "./deployEnvironment.js";
 import {
   componentNameCandidates,
   isLegacyAutoDetected,
@@ -70,7 +71,8 @@ Options:
   -d, --dist <path>           Path to dist directory (default: ./dist)
   -c, --component <name>      Static-hosting component instance name (default: staticHosting)
       --prod                  Deploy to production deployment
-  -b, --build                 Run the build command with VITE_CONVEX_URL +
+  -b, --build                 Run the build command with VITE_CONVEX_URL,
+                              VITE_CONVEX_SITE_URL, and
                               STATIC_HOSTING_BASE_PATH set before uploading
       --build-command <cmd>   Build command to run (default: 'npm run build').
                               Implies --build.
@@ -814,19 +816,24 @@ async function main(): Promise<void> {
 
   // Run build if requested
   if (args.build) {
-    const basePath = new URL(componentSiteUrl).pathname || "/";
+    const environment = buildEnvironment({
+      siteUrl: componentSiteUrl,
+      cloudUrl: convexUrl,
+    });
 
     const envLabel = useProd ? "production" : "development";
     console.log(`🔨 Building for ${envLabel}...`);
     console.log(`   Build command: ${args.buildCommand}`);
-    console.log(`   VITE_CONVEX_URL=${convexUrl}`);
-    console.log(`   STATIC_HOSTING_BASE_PATH=${basePath}`);
+    console.log(`   VITE_CONVEX_URL=${environment.cloudUrl}`);
+    console.log(`   VITE_CONVEX_SITE_URL=${environment.siteUrl}`);
+    console.log(`   STATIC_HOSTING_BASE_PATH=${environment.basePath}`);
     console.log("");
 
     const buildResult = spawnShell(args.buildCommand, {
       ...process.env,
-      VITE_CONVEX_URL: convexUrl,
-      STATIC_HOSTING_BASE_PATH: basePath,
+      VITE_CONVEX_URL: environment.cloudUrl,
+      VITE_CONVEX_SITE_URL: environment.siteUrl,
+      STATIC_HOSTING_BASE_PATH: environment.basePath,
     });
 
     if (buildResult !== 0) {
