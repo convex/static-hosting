@@ -84,7 +84,7 @@ For LLMs:
   Read INTEGRATION.md in this package for complete integration instructions
 
 Manual Setup:
-  See README.md at https://github.com/get-convex/static-hosting#readme
+  See README.md at https://github.com/convex/static-hosting#readme
 
 This component hosts your static files in Convex storage and serves them via HTTP actions.
 `);

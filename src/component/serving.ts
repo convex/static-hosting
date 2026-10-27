@@ -94,7 +94,7 @@ export function getSetupHtml(): string {
   <pre>npm run deploy</pre>
 
   <p style="margin-top: 32px; color: #666; font-size: 14px;">
-    Learn more at <a href="https://github.com/get-convex/static-hosting">github.com/get-convex/static-hosting</a>
+    Learn more at <a href="https://github.com/convex/static-hosting">github.com/convex/static-hosting</a>
   </p>
 </body>
 </html>`;

@@ -3,11 +3,11 @@
   "description": "A static hosting component for Convex.",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/get-convex/static-hosting.git"
+    "url": "git+https://github.com/convex/static-hosting.git"
   },
-  "homepage": "https://github.com/get-convex/static-hosting#readme",
+  "homepage": "https://github.com/convex/static-hosting#readme",
   "bugs": {
-    "url": "https://github.com/get-convex/static-hosting/issues"
+    "url": "https://github.com/convex/static-hosting/issues"
   },
   "version": "0.2.1",
   "license": "Apache-2.0",
