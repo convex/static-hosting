@@ -161,12 +161,14 @@ function runFrontendBuild(args: DeployArgs, urls: DeploymentUrls): void {
   const environment = buildEnvironment(urls);
   console.log(`   Build command: ${args.buildCommand}`);
   console.log(`   VITE_CONVEX_URL=${environment.cloudUrl}`);
+  console.log(`   VITE_CONVEX_SITE_URL=${environment.siteUrl}`);
   console.log(`   STATIC_HOSTING_BASE_PATH=${environment.basePath}`);
   console.log("");
 
   const buildResult = spawnShell(args.buildCommand, {
     ...process.env,
     VITE_CONVEX_URL: environment.cloudUrl,
+    VITE_CONVEX_SITE_URL: environment.siteUrl,
     STATIC_HOSTING_BASE_PATH: environment.basePath,
   });
   if (buildResult !== 0) {

@@ -233,8 +233,9 @@ succeeds, so a lost publish response does not make them unrecoverable.
 
 ## Non-Vite bundlers
 
-The `deploy` build step and `upload --build` set `VITE_CONVEX_URL`. To forward
-it to another env var (Expo, Next.js, etc.), wrap your build script:
+The `deploy` build step and `upload --build` set `VITE_CONVEX_URL`,
+`VITE_CONVEX_SITE_URL`, and `STATIC_HOSTING_BASE_PATH`. To forward them to other
+env vars (Expo, Next.js, etc.), wrap your build script:
 
 ```text
 Expo build script:

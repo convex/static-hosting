@@ -12,8 +12,8 @@ alongside your backend.
 - 🚀 **One-command deploy:** build, push backend, and upload static files in a
   single step.
 - 🔄 **SPA routing:** paths without an extension fall back to `index.html`.
-- ⚡ **Smart caching:** static files are cached for speed, with safe updates when
-  a new version is deployed.
+- ⚡ **Smart caching:** static files are cached for speed, with safe updates
+  when a new version is deployed.
 - 🔔 **Deployment update notifications:** show connected users a prompt when a
   new version is ready.
 - 🔒 **Authenticated uploads:** uploads go through the Convex CLI's
@@ -134,9 +134,10 @@ component-owned mode when you do not need root-level app routes.
 
 ### Using non-Vite bundlers
 
-The `deploy` build step and `upload --build` set `VITE_CONVEX_URL`. For bundlers
-that use different environment variable conventions, wrap your build script to
-pass through the value:
+The `deploy` build step and `upload --build` set `VITE_CONVEX_URL`,
+`VITE_CONVEX_SITE_URL`, and `STATIC_HOSTING_BASE_PATH`. For bundlers that use
+different environment variable conventions, wrap your build script to pass
+through the values you need:
 
 **For Expo:**
 
@@ -242,8 +243,8 @@ npx @convex-dev/static-hosting upload [options]
 
 Each upload is published atomically, so visitors never see a page that refers to
 assets that are not available yet. Failed uploads leave the previous deployment
-live, and old files are cleaned up safely. See [INTEGRATION.md](./INTEGRATION.md)
-for upload limits and lifecycle details.
+live, and old files are cleaned up safely. See
+[INTEGRATION.md](./INTEGRATION.md) for upload limits and lifecycle details.
 
 Convex HTTP routes currently support GET but not HEAD. Configure uptime checks
 to make a lightweight GET request rather than a HEAD request.
