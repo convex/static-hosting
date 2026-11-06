@@ -19,7 +19,7 @@
  */
 
 import { readFileSync, readdirSync, existsSync } from "fs";
-import { join, relative, extname, resolve } from "path";
+import { join, relative, resolve } from "path";
 import { randomUUID } from "crypto";
 import { runConvexAsync, spawnShell } from "./commands.js";
 import {
@@ -27,59 +27,12 @@ import {
   MAX_CONVEX_ARGUMENT_BYTES,
 } from "./argumentChunks.js";
 import { parseUploadArgs } from "./args.js";
+import { getMimeType } from "../component/serving.js";
 import {
   componentNameCandidates,
   isLegacyAutoDetected,
   legacyComponentNameWarning,
 } from "./componentName.js";
-
-// MIME type mapping
-const MIME_TYPES: Record<string, string> = {
-  ".html": "text/html; charset=utf-8",
-  ".js": "application/javascript; charset=utf-8",
-  ".mjs": "application/javascript; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".gif": "image/gif",
-  ".svg": "image/svg+xml",
-  ".ico": "image/x-icon",
-  ".webp": "image/webp",
-  ".woff": "font/woff",
-  ".woff2": "font/woff2",
-  ".ttf": "font/ttf",
-  ".txt": "text/plain; charset=utf-8",
-  ".map": "application/json",
-  ".webmanifest": "application/manifest+json",
-  ".xml": "application/xml",
-  ".md": "text/markdown; charset=utf-8",
-  ".markdown": "text/markdown; charset=utf-8",
-  ".csv": "text/csv; charset=utf-8",
-  ".vtt": "text/vtt; charset=utf-8",
-  ".mp3": "audio/mpeg",
-  ".m4a": "audio/mp4",
-  ".aac": "audio/aac",
-  ".wav": "audio/wav",
-  ".ogg": "audio/ogg",
-  ".oga": "audio/ogg",
-  ".opus": "audio/opus",
-  ".flac": "audio/flac",
-  ".mp4": "video/mp4",
-  ".webm": "video/webm",
-  ".mov": "video/quicktime",
-  ".avif": "image/avif",
-  ".bmp": "image/bmp",
-  ".otf": "font/otf",
-  ".pdf": "application/pdf",
-  ".wasm": "application/wasm",
-  ".zip": "application/zip",
-};
-
-function getMimeType(path: string): string {
-  return MIME_TYPES[extname(path).toLowerCase()] || "application/octet-stream";
-}
 
 function showHelp(): void {
   console.log(`
