@@ -10,6 +10,7 @@ import {
   decodeRequestPath,
   etagMatches,
   getSetupHtml,
+  parseByteRange,
   resolveContentType,
   isHtmlContentType,
 } from "../component/serving.js";
@@ -160,15 +161,30 @@ export function registerStaticRoutes(
           headers: { "Content-Type": "text/plain" },
         });
       }
-      return new Response(blob, {
-        status: 200,
-        headers: {
-          "Content-Type": contentType,
-          "Cache-Control": cacheControl,
-          ...(asset.etag ? { ETag: asset.etag } : {}),
-          "X-Content-Type-Options": "nosniff",
-        },
-      });
+      const headers = {
+        "Content-Type": contentType,
+        "Cache-Control": cacheControl,
+        ...(asset.etag ? { ETag: asset.etag } : {}),
+        "X-Content-Type-Options": "nosniff",
+        "Accept-Ranges": "bytes",
+      };
+      const range = parseByteRange(request.headers.get("Range"), blob.size);
+      if (range === "unsatisfiable") {
+        return new Response(null, {
+          status: 416,
+          headers: { "Content-Range": `bytes */${blob.size}` },
+        });
+      }
+      if (range) {
+        return new Response(blob.slice(range.start, range.end + 1), {
+          status: 206,
+          headers: {
+            ...headers,
+            "Content-Range": `bytes ${range.start}-${range.end}/${blob.size}`,
+          },
+        });
+      }
+      return new Response(blob, { status: 200, headers });
     }
 
     if (!asset.storageUrl) {
@@ -188,7 +204,13 @@ export function registerStaticRoutes(
       });
     }
 
-    const storageResponse = await fetch(asset.storageUrl);
+    // Forward Range so audio/video can seek; the storage response's 206 and
+    // range headers are passed through below.
+    const rangeHeader = request.headers.get("Range");
+    const storageResponse = await fetch(
+      asset.storageUrl,
+      rangeHeader ? { headers: { Range: rangeHeader } } : undefined,
+    );
     if (!storageResponse.ok || !storageResponse.body) {
       return new Response("Storage error", {
         status: 500,
@@ -196,13 +218,16 @@ export function registerStaticRoutes(
       });
     }
 
+    const contentRange = storageResponse.headers.get("Content-Range");
     return new Response(storageResponse.body, {
-      status: 200,
+      status: storageResponse.status === 206 ? 206 : 200,
       headers: {
         "Content-Type": contentType,
         "Cache-Control": cacheControl,
         ...(asset.etag ? { ETag: asset.etag } : {}),
         "X-Content-Type-Options": "nosniff",
+        "Accept-Ranges": "bytes",
+        ...(contentRange ? { "Content-Range": contentRange } : {}),
       },
     });
   });

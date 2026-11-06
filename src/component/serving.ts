@@ -2,7 +2,11 @@
 // asset-resolution query (lib.ts). Kept separate so lib.ts can reuse them
 // without importing the HTTP router.
 
-export { getMimeType, resolveContentType } from "../mime/mime.js";
+export {
+  getMimeType,
+  resolveContentType,
+  parseByteRange,
+} from "../mime/mime.js";
 
 export function getSetupHtml(): string {
   return `<!DOCTYPE html>
