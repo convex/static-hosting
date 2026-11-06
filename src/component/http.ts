@@ -5,8 +5,9 @@ import {
   cacheControlFor,
   decodeRequestPath,
   etagMatches,
-  getMimeType,
   getSetupHtml,
+  parseByteRange,
+  resolveContentType,
   isHtmlContentType,
 } from "./serving.js";
 
@@ -68,7 +69,7 @@ const serveStaticFile = httpAction(async (ctx, request) => {
     });
   }
 
-  const contentType = asset.contentType || getMimeType(path);
+  const contentType = resolveContentType(asset.contentType, path);
 
   // CDN redirect: blobs are served by the platform at /fs/blobs/{id}, which
   // lives at the deployment root (not under the component's prefix).
@@ -122,15 +123,30 @@ const serveStaticFile = httpAction(async (ctx, request) => {
     });
   }
 
-  return new Response(blob, {
-    status: 200,
-    headers: {
-      "Content-Type": contentType,
-      "Cache-Control": cacheControl,
-      ETag: etag,
-      "X-Content-Type-Options": "nosniff",
-    },
-  });
+  const headers = {
+    "Content-Type": contentType,
+    "Cache-Control": cacheControl,
+    ETag: etag,
+    "X-Content-Type-Options": "nosniff",
+    "Accept-Ranges": "bytes",
+  };
+  const range = parseByteRange(request.headers.get("Range"), blob.size);
+  if (range === "unsatisfiable") {
+    return new Response(null, {
+      status: 416,
+      headers: { "Content-Range": `bytes */${blob.size}` },
+    });
+  }
+  if (range) {
+    return new Response(blob.slice(range.start, range.end + 1), {
+      status: 206,
+      headers: {
+        ...headers,
+        "Content-Range": `bytes ${range.start}-${range.end}/${blob.size}`,
+      },
+    });
+  }
+  return new Response(blob, { status: 200, headers });
 });
 
 const http = httpRouter();

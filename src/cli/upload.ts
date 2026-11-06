@@ -27,7 +27,7 @@ import {
   MAX_CONVEX_ARGUMENT_BYTES,
 } from "./argumentChunks.js";
 import { parseUploadArgs } from "./args.js";
-import { getMimeType } from "../component/serving.js";
+import { getMimeType } from "../shared/mime.js";
 import {
   componentNameCandidates,
   isLegacyAutoDetected,

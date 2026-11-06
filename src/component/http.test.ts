@@ -10,6 +10,8 @@ import {
   etagMatches,
   getMimeType,
   hasFileExtension,
+  parseByteRange,
+  resolveContentType,
   isHashedAsset,
 } from "./serving.js";
 
@@ -193,6 +195,32 @@ describe("static file serving", () => {
   });
 });
 
+describe("media serving", () => {
+  test("stored octet-stream mp3 is served as audio/mpeg with range support", async () => {
+    const t = initConvexTest();
+    await storeAsset(
+      t,
+      "/index.html",
+      "<html></html>",
+      "text/html; charset=utf-8",
+    );
+    await storeAsset(t, "/ep1.mp3", "0123456789", "application/octet-stream");
+
+    const full = await t.fetch("/ep1.mp3", {});
+    expect(full.status).toBe(200);
+    expect(full.headers.get("Content-Type")).toBe("audio/mpeg");
+    expect(full.headers.get("Accept-Ranges")).toBe("bytes");
+
+    const part = await t.fetch("/ep1.mp3", { headers: { Range: "bytes=2-4" } });
+    expect(part.status).toBe(206);
+    expect(part.headers.get("Content-Range")).toBe("bytes 2-4/10");
+    expect(await part.text()).toBe("234");
+
+    const bad = await t.fetch("/ep1.mp3", { headers: { Range: "bytes=50-" } });
+    expect(bad.status).toBe(416);
+  });
+});
+
 describe("serving helpers", () => {
   test("getMimeType maps known extensions and defaults to octet-stream", () => {
     expect(getMimeType("/index.html")).toBe("text/html; charset=utf-8");
@@ -204,7 +232,25 @@ describe("serving helpers", () => {
   test("getMimeType covers audio and markdown", () => {
     expect(getMimeType("/ep1.mp3")).toBe("audio/mpeg");
     expect(getMimeType("/ep1.MP3")).toBe("audio/mpeg");
-    expect(getMimeType("/ep1.md")).toBe("text/markdown; charset=utf-8");
+    expect(getMimeType("/ep1.md")).toBe("text/plain; charset=utf-8");
+    expect(getMimeType("/v1.2/README")).toBe("application/octet-stream");
+    expect(getMimeType("C:\\a.b\\file")).toBe("application/octet-stream");
+  });
+
+  test("resolveContentType re-derives a stored octet-stream", () => {
+    expect(resolveContentType("application/octet-stream", "/a.mp3")).toBe(
+      "audio/mpeg",
+    );
+    expect(resolveContentType("image/png", "/a.mp3")).toBe("image/png");
+    expect(resolveContentType(undefined, "/a.mp3")).toBe("audio/mpeg");
+  });
+
+  test("parseByteRange handles ranges", () => {
+    expect(parseByteRange(null, 10)).toBeNull();
+    expect(parseByteRange("bytes=2-4", 10)).toEqual({ start: 2, end: 4 });
+    expect(parseByteRange("bytes=5-", 10)).toEqual({ start: 5, end: 9 });
+    expect(parseByteRange("bytes=-3", 10)).toEqual({ start: 7, end: 9 });
+    expect(parseByteRange("bytes=20-", 10)).toBe("unsatisfiable");
   });
 
   test("hasFileExtension distinguishes routes from files", () => {
