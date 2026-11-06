@@ -9,8 +9,8 @@ import {
   cacheControlFor,
   decodeRequestPath,
   etagMatches,
-  getMimeType,
   getSetupHtml,
+  resolveContentType,
   isHtmlContentType,
 } from "../component/serving.js";
 
@@ -106,7 +106,7 @@ export function registerStaticRoutes(
       });
     }
 
-    const contentType = asset.contentType || getMimeType(path);
+    const contentType = resolveContentType(asset.contentType, path);
     const cacheControl = cacheControlFor(path);
 
     if (asset.blobId && !isHtmlContentType(contentType)) {

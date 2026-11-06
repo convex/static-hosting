@@ -10,6 +10,7 @@ import {
   etagMatches,
   getMimeType,
   hasFileExtension,
+  resolveContentType,
   isHashedAsset,
 } from "./serving.js";
 
@@ -199,6 +200,22 @@ describe("serving helpers", () => {
     expect(getMimeType("/a/b/style.css")).toBe("text/css; charset=utf-8");
     expect(getMimeType("/favicon.ico")).toBe("image/x-icon");
     expect(getMimeType("/data.unknownext")).toBe("application/octet-stream");
+  });
+
+  test("getMimeType covers audio and markdown", () => {
+    expect(getMimeType("/ep1.mp3")).toBe("audio/mpeg");
+    expect(getMimeType("/ep1.MP3")).toBe("audio/mpeg");
+    expect(getMimeType("/ep1.md")).toBe("text/plain; charset=utf-8");
+    expect(getMimeType("/v1.2/README")).toBe("application/octet-stream");
+    expect(getMimeType("C:\\a.b\\file")).toBe("application/octet-stream");
+  });
+
+  test("resolveContentType re-derives a stored octet-stream", () => {
+    expect(resolveContentType("application/octet-stream", "/a.mp3")).toBe(
+      "audio/mpeg",
+    );
+    expect(resolveContentType("image/png", "/a.mp3")).toBe("image/png");
+    expect(resolveContentType(undefined, "/a.mp3")).toBe("audio/mpeg");
   });
 
   test("hasFileExtension distinguishes routes from files", () => {
