@@ -89,3 +89,33 @@ export function parseByteRange(
   if (start >= size || start > end) return "unsatisfiable";
   return { start, end };
 }
+
+/**
+ * Build the response for an in-memory blob, honoring a single `Range`
+ * request: 206 for a satisfiable range, 416 otherwise, 200 with no range.
+ * `headers` are the full-response headers (type, caching, ETag, ...).
+ */
+export function blobResponse(
+  blob: Blob,
+  headers: Record<string, string>,
+  rangeHeader: string | null,
+): Response {
+  const range = parseByteRange(rangeHeader, blob.size);
+  if (range === "unsatisfiable") {
+    return new Response(null, {
+      status: 416,
+      headers: { "Content-Range": `bytes */${blob.size}` },
+    });
+  }
+  const base = { ...headers, "Accept-Ranges": "bytes" };
+  if (range) {
+    return new Response(blob.slice(range.start, range.end + 1), {
+      status: 206,
+      headers: {
+        ...base,
+        "Content-Range": `bytes ${range.start}-${range.end}/${blob.size}`,
+      },
+    });
+  }
+  return new Response(blob, { status: 200, headers: base });
+}

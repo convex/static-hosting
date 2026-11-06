@@ -6,6 +6,7 @@ export {
   getMimeType,
   resolveContentType,
   parseByteRange,
+  blobResponse,
 } from "../shared/mime.js";
 
 export function getSetupHtml(): string {

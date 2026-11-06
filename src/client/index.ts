@@ -10,7 +10,7 @@ import {
   decodeRequestPath,
   etagMatches,
   getSetupHtml,
-  parseByteRange,
+  blobResponse,
   resolveContentType,
   isHtmlContentType,
 } from "../component/serving.js";
@@ -161,30 +161,16 @@ export function registerStaticRoutes(
           headers: { "Content-Type": "text/plain" },
         });
       }
-      const headers = {
-        "Content-Type": contentType,
-        "Cache-Control": cacheControl,
-        ...(asset.etag ? { ETag: asset.etag } : {}),
-        "X-Content-Type-Options": "nosniff",
-        "Accept-Ranges": "bytes",
-      };
-      const range = parseByteRange(request.headers.get("Range"), blob.size);
-      if (range === "unsatisfiable") {
-        return new Response(null, {
-          status: 416,
-          headers: { "Content-Range": `bytes */${blob.size}` },
-        });
-      }
-      if (range) {
-        return new Response(blob.slice(range.start, range.end + 1), {
-          status: 206,
-          headers: {
-            ...headers,
-            "Content-Range": `bytes ${range.start}-${range.end}/${blob.size}`,
-          },
-        });
-      }
-      return new Response(blob, { status: 200, headers });
+      return blobResponse(
+        blob,
+        {
+          "Content-Type": contentType,
+          "Cache-Control": cacheControl,
+          ...(asset.etag ? { ETag: asset.etag } : {}),
+          "X-Content-Type-Options": "nosniff",
+        },
+        request.headers.get("Range"),
+      );
     }
 
     if (!asset.storageUrl) {
@@ -211,6 +197,13 @@ export function registerStaticRoutes(
       asset.storageUrl,
       rangeHeader ? { headers: { Range: rangeHeader } } : undefined,
     );
+    if (storageResponse.status === 416) {
+      const contentRange = storageResponse.headers.get("Content-Range");
+      return new Response(null, {
+        status: 416,
+        ...(contentRange ? { headers: { "Content-Range": contentRange } } : {}),
+      });
+    }
     if (!storageResponse.ok || !storageResponse.body) {
       return new Response("Storage error", {
         status: 500,

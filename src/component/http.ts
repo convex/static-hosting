@@ -6,7 +6,7 @@ import {
   decodeRequestPath,
   etagMatches,
   getSetupHtml,
-  parseByteRange,
+  blobResponse,
   resolveContentType,
   isHtmlContentType,
 } from "./serving.js";
@@ -123,30 +123,16 @@ const serveStaticFile = httpAction(async (ctx, request) => {
     });
   }
 
-  const headers = {
-    "Content-Type": contentType,
-    "Cache-Control": cacheControl,
-    ETag: etag,
-    "X-Content-Type-Options": "nosniff",
-    "Accept-Ranges": "bytes",
-  };
-  const range = parseByteRange(request.headers.get("Range"), blob.size);
-  if (range === "unsatisfiable") {
-    return new Response(null, {
-      status: 416,
-      headers: { "Content-Range": `bytes */${blob.size}` },
-    });
-  }
-  if (range) {
-    return new Response(blob.slice(range.start, range.end + 1), {
-      status: 206,
-      headers: {
-        ...headers,
-        "Content-Range": `bytes ${range.start}-${range.end}/${blob.size}`,
-      },
-    });
-  }
-  return new Response(blob, { status: 200, headers });
+  return blobResponse(
+    blob,
+    {
+      "Content-Type": contentType,
+      "Cache-Control": cacheControl,
+      ETag: etag,
+      "X-Content-Type-Options": "nosniff",
+    },
+    request.headers.get("Range"),
+  );
 });
 
 const http = httpRouter();
