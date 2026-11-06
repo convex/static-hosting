@@ -201,6 +201,12 @@ describe("serving helpers", () => {
     expect(getMimeType("/data.unknownext")).toBe("application/octet-stream");
   });
 
+  test("getMimeType covers audio and markdown", () => {
+    expect(getMimeType("/ep1.mp3")).toBe("audio/mpeg");
+    expect(getMimeType("/ep1.MP3")).toBe("audio/mpeg");
+    expect(getMimeType("/ep1.md")).toBe("text/markdown; charset=utf-8");
+  });
+
   test("hasFileExtension distinguishes routes from files", () => {
     expect(hasFileExtension("/index.html")).toBe(true);
     expect(hasFileExtension("/assets/app.js")).toBe(true);
