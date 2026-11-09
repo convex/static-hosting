@@ -65,15 +65,31 @@ export function resolveContentType(
 }
 
 /**
+ * Whether a `Range` header should be honored given `If-Range`. RFC 9110
+ * §13.1.5 requires a strong comparison: a missing or weak validator, a
+ * date, or a stale ETag means the full representation is served instead.
+ */
+export function ifRangeMatches(
+  ifRange: string | null,
+  etag: string | null | undefined,
+): boolean {
+  if (ifRange === null) return true;
+  if (!etag) return false;
+  const validator = ifRange.trim();
+  return !validator.startsWith("W/") && validator === etag;
+}
+
+/**
  * Parse a single-range `Range: bytes=...` header against a body of `size`
  * bytes. Returns null when the header is absent or not a single byte range
  * (serve the full body), "unsatisfiable" for a 416, or the inclusive range.
+ * The range unit name is case-insensitive (RFC 9110 §14.1).
  */
 export function parseByteRange(
   header: string | null,
   size: number,
 ): { start: number; end: number } | "unsatisfiable" | null {
-  const match = header?.match(/^bytes=(\d*)-(\d*)$/);
+  const match = header?.match(/^bytes=(\d*)-(\d*)$/i);
   if (!match || (match[1] === "" && match[2] === "")) return null;
   let start: number;
   let end: number;
@@ -94,13 +110,17 @@ export function parseByteRange(
  * Build the response for an in-memory blob, honoring a single `Range`
  * request: 206 for a satisfiable range, 416 otherwise, 200 with no range.
  * `headers` are the full-response headers (type, caching, ETag, ...).
+ * `ifRange` is the request's If-Range; a stale validator serves the full body.
  */
 export function blobResponse(
   blob: Blob,
   headers: Record<string, string>,
   rangeHeader: string | null,
+  ifRange: string | null = null,
 ): Response {
-  const range = parseByteRange(rangeHeader, blob.size);
+  const range = ifRangeMatches(ifRange, headers.ETag)
+    ? parseByteRange(rangeHeader, blob.size)
+    : null;
   if (range === "unsatisfiable") {
     return new Response(null, {
       status: 416,

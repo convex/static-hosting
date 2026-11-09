@@ -8,12 +8,14 @@ import {
   cacheControlFor,
   decodeRequestPath,
   etagMatches,
-  getMimeType,
   hasFileExtension,
-  parseByteRange,
-  resolveContentType,
   isHashedAsset,
 } from "./serving.js";
+import {
+  getMimeType,
+  parseByteRange,
+  resolveContentType,
+} from "../mime/mime.js";
 
 async function storeAsset(
   t: ReturnType<typeof initConvexTest>,

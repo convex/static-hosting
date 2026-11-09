@@ -6,10 +6,9 @@ import {
   decodeRequestPath,
   etagMatches,
   getSetupHtml,
-  blobResponse,
-  resolveContentType,
   isHtmlContentType,
 } from "./serving.js";
+import { blobResponse, resolveContentType } from "../mime/mime.js";
 
 // CONVEX_SITE_URL reflects the component's mount point (including any httpPrefix).
 // We use it to strip the prefix from incoming request paths so lookups in
@@ -132,6 +131,7 @@ const serveStaticFile = httpAction(async (ctx, request) => {
       "X-Content-Type-Options": "nosniff",
     },
     request.headers.get("Range"),
+    request.headers.get("If-Range"),
   );
 });
 

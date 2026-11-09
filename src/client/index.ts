@@ -10,10 +10,13 @@ import {
   decodeRequestPath,
   etagMatches,
   getSetupHtml,
-  blobResponse,
-  resolveContentType,
   isHtmlContentType,
 } from "../component/serving.js";
+import {
+  blobResponse,
+  ifRangeMatches,
+  resolveContentType,
+} from "../mime/mime.js";
 
 const deploymentInfoValidator = v.object({
   _id: v.string(),
@@ -170,6 +173,7 @@ export function registerStaticRoutes(
           "X-Content-Type-Options": "nosniff",
         },
         request.headers.get("Range"),
+        request.headers.get("If-Range"),
       );
     }
 
@@ -191,8 +195,14 @@ export function registerStaticRoutes(
     }
 
     // Forward Range so audio/video can seek; the storage response's 206 and
-    // range headers are passed through below.
-    const rangeHeader = request.headers.get("Range");
+    // range headers are passed through below. A stale If-Range drops Range so
+    // storage returns the full representation.
+    const rangeHeader = ifRangeMatches(
+      request.headers.get("If-Range"),
+      asset.etag,
+    )
+      ? request.headers.get("Range")
+      : null;
     const storageResponse = await fetch(
       asset.storageUrl,
       rangeHeader ? { headers: { Range: rangeHeader } } : undefined,
@@ -219,7 +229,12 @@ export function registerStaticRoutes(
         "Cache-Control": cacheControl,
         ...(asset.etag ? { ETag: asset.etag } : {}),
         "X-Content-Type-Options": "nosniff",
-        "Accept-Ranges": "bytes",
+        // Advertise range support only when storage actually honored or
+        // offered it, not on every 200.
+        ...(storageResponse.status === 206 ||
+        storageResponse.headers.get("Accept-Ranges")
+          ? { "Accept-Ranges": "bytes" }
+          : {}),
         ...(contentRange ? { "Content-Range": contentRange } : {}),
       },
     });
