@@ -19,7 +19,7 @@
  */
 
 import { readFileSync, readdirSync, existsSync } from "fs";
-import { join, relative, extname, resolve } from "path";
+import { join, relative, resolve } from "path";
 import { randomUUID } from "crypto";
 import { runConvexAsync, spawnShell } from "./commands.js";
 import {
@@ -27,38 +27,12 @@ import {
   MAX_CONVEX_ARGUMENT_BYTES,
 } from "./argumentChunks.js";
 import { parseUploadArgs } from "./args.js";
+import { getMimeType } from "../mime/mime.js";
 import {
   componentNameCandidates,
   isLegacyAutoDetected,
   legacyComponentNameWarning,
 } from "./componentName.js";
-
-// MIME type mapping
-const MIME_TYPES: Record<string, string> = {
-  ".html": "text/html; charset=utf-8",
-  ".js": "application/javascript; charset=utf-8",
-  ".mjs": "application/javascript; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".gif": "image/gif",
-  ".svg": "image/svg+xml",
-  ".ico": "image/x-icon",
-  ".webp": "image/webp",
-  ".woff": "font/woff",
-  ".woff2": "font/woff2",
-  ".ttf": "font/ttf",
-  ".txt": "text/plain; charset=utf-8",
-  ".map": "application/json",
-  ".webmanifest": "application/manifest+json",
-  ".xml": "application/xml",
-};
-
-function getMimeType(path: string): string {
-  return MIME_TYPES[extname(path).toLowerCase()] || "application/octet-stream";
-}
 
 function showHelp(): void {
   console.log(`

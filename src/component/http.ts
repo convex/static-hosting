@@ -5,8 +5,8 @@ import {
   cacheControlFor,
   decodeRequestPath,
   etagMatches,
-  getMimeType,
   getSetupHtml,
+  resolveContentType,
   isHtmlContentType,
 } from "./serving.js";
 
@@ -68,7 +68,7 @@ const serveStaticFile = httpAction(async (ctx, request) => {
     });
   }
 
-  const contentType = asset.contentType || getMimeType(path);
+  const contentType = resolveContentType(asset.contentType, path);
 
   // CDN redirect: blobs are served by the platform at /fs/blobs/{id}, which
   // lives at the deployment root (not under the component's prefix).
