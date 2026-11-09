@@ -222,6 +222,9 @@ export function registerStaticRoutes(
     }
 
     const contentRange = storageResponse.headers.get("Content-Range");
+    const storageSupportsRanges =
+      storageResponse.status === 206 ||
+      Boolean(storageResponse.headers.get("Accept-Ranges"));
     return new Response(storageResponse.body, {
       status: storageResponse.status === 206 ? 206 : 200,
       headers: {
@@ -229,12 +232,7 @@ export function registerStaticRoutes(
         "Cache-Control": cacheControl,
         ...(asset.etag ? { ETag: asset.etag } : {}),
         "X-Content-Type-Options": "nosniff",
-        // Advertise range support only when storage actually honored or
-        // offered it, not on every 200.
-        ...(storageResponse.status === 206 ||
-        storageResponse.headers.get("Accept-Ranges")
-          ? { "Accept-Ranges": "bytes" }
-          : {}),
+        ...(storageSupportsRanges ? { "Accept-Ranges": "bytes" } : {}),
         ...(contentRange ? { "Content-Range": contentRange } : {}),
       },
     });

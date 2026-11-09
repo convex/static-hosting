@@ -308,8 +308,6 @@ describe("serving helpers", () => {
   });
 
   test("dotfiles and extensionless names keep octet-stream", () => {
-    // Node's extname returned "" for these, so they already mapped to
-    // octet-stream. The current lookup preserves that behavior.
     expect(getMimeType(".html")).toBe("application/octet-stream");
     expect(getMimeType(".json")).toBe("application/octet-stream");
     expect(getMimeType("assets/.mp3")).toBe("application/octet-stream");
