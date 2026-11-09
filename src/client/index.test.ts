@@ -85,6 +85,56 @@ describe("registerStaticRoutes", () => {
     expect(await response.text()).toBe("<h1>Hello</h1>");
   });
 
+  test("does not advertise Accept-Ranges when storage ignores Range", async () => {
+    const handler = staticHandler();
+    const runQuery = vi.fn().mockResolvedValue({
+      storageUrl: "https://storage.example/ep.mp3",
+      contentType: "audio/mpeg",
+      etag: '"storage-id"',
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response("0123456789")),
+    );
+
+    const response = await invokeHandler(
+      handler,
+      runQuery,
+      new Request("https://app.convex.site/ep.mp3", {
+        headers: { Range: "bytes=2-4" },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Accept-Ranges")).toBeNull();
+  });
+
+  test("ignores Range when If-Range does not match the current ETag", async () => {
+    const handler = staticHandler();
+    const runQuery = vi.fn().mockResolvedValue({
+      storageUrl: "https://storage.example/ep.mp3",
+      contentType: "audio/mpeg",
+      etag: '"storage-id"',
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response("0123456789", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await invokeHandler(
+      handler,
+      runQuery,
+      new Request("https://app.convex.site/ep.mp3", {
+        headers: { Range: "bytes=2-4", "If-Range": '"old-storage-id"' },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("0123456789");
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined;
+    expect(new Headers(init?.headers).get("Range")).toBeNull();
+  });
+
   test("serves an inherited v1 asset from the app's storage during migration", async () => {
     const handler = staticHandler();
     const runQuery = vi.fn().mockResolvedValue({
