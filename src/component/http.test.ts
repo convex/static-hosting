@@ -10,6 +10,7 @@ import {
   etagMatches,
   getMimeType,
   hasFileExtension,
+  resolveContentType,
   isHashedAsset,
 } from "./serving.js";
 
