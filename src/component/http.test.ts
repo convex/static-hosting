@@ -202,6 +202,30 @@ describe("serving helpers", () => {
     expect(getMimeType("/data.unknownext")).toBe("application/octet-stream");
   });
 
+  test("getMimeType covers audio and markdown", () => {
+    expect(getMimeType("/ep1.mp3")).toBe("audio/mpeg");
+    expect(getMimeType("/ep1.MP3")).toBe("audio/mpeg");
+    expect(getMimeType("/ep1.md")).toBe("text/plain; charset=utf-8");
+    expect(getMimeType("/v1.2/README")).toBe("application/octet-stream");
+    expect(getMimeType("C:\\a.b\\file")).toBe("application/octet-stream");
+  });
+
+  test("resolveContentType re-derives a stored octet-stream", () => {
+    expect(resolveContentType("application/octet-stream", "/a.mp3")).toBe(
+      "audio/mpeg",
+    );
+    expect(resolveContentType("image/png", "/a.mp3")).toBe("image/png");
+    expect(resolveContentType(undefined, "/a.mp3")).toBe("audio/mpeg");
+  });
+
+  test("dotfiles and extensionless names keep octet-stream", () => {
+    expect(getMimeType(".html")).toBe("application/octet-stream");
+    expect(getMimeType(".json")).toBe("application/octet-stream");
+    expect(getMimeType("assets/.mp3")).toBe("application/octet-stream");
+    expect(getMimeType("v1.2/README")).toBe("application/octet-stream");
+    expect(getMimeType("dir/Index.HTML")).toBe("text/html; charset=utf-8");
+  });
+
   test("hasFileExtension distinguishes routes from files", () => {
     expect(hasFileExtension("/index.html")).toBe(true);
     expect(hasFileExtension("/assets/app.js")).toBe(true);
