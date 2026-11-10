@@ -1,8 +1,7 @@
 // Pure, dependency-free helpers shared by the HTTP handler (http.ts) and the
 // asset-resolution query (lib.ts). Kept separate so lib.ts can reuse them
-// without importing the HTTP router.
-
-export { getMimeType, resolveContentType } from "../mime/mime.js";
+// without importing the HTTP router. MIME and Range helpers live in
+// ../mime/mime.js and are imported from there directly.
 
 export function getSetupHtml(): string {
   return `<!DOCTYPE html>
