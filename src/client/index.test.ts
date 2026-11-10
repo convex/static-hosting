@@ -302,3 +302,63 @@ describe("exposeDeploymentQuery", () => {
     });
   });
 });
+describe("app 404 page through registerStaticRoutes", () => {
+  test("a miss is answered with the storage-backed 404 page and status 404", async () => {
+    const handler = staticHandler();
+    const runQuery = vi.fn(async (_fn: unknown, args: { path: string }) =>
+      args.path === "/404.html"
+        ? {
+            storageUrl: "https://storage.example/404",
+            contentType: "text/html; charset=utf-8",
+            etag: '"nf"',
+          }
+        : null,
+    );
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("<h1>Gone</h1>")));
+
+    const response = await invokeHandler(
+      handler,
+      runQuery,
+      new Request("https://app.convex.site/missing.js"),
+    );
+
+    expect(response.status).toBe(404);
+    expect(response.headers.get("Content-Type")).toBe("text/html; charset=utf-8");
+    expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    expect(await response.text()).toBe("<h1>Gone</h1>");
+  });
+
+  test("a miss without an app 404 page keeps the plain-text 404", async () => {
+    const handler = staticHandler();
+    const runQuery = vi.fn().mockResolvedValue(null);
+
+    const response = await invokeHandler(
+      handler,
+      runQuery,
+      new Request("https://app.convex.site/missing.js"),
+    );
+
+    expect(response.status).toBe(404);
+    expect(response.headers.get("Content-Type")).toBe("text/plain");
+    expect(await response.text()).toBe("Not Found");
+  });
+});
+
+describe("app 404 page upstream failure", () => {
+  test("a failed upstream fetch for the 404 page falls back to plain text", async () => {
+    const handler = staticHandler();
+    const runQuery = vi.fn(async (_fn: unknown, args: { path: string }) =>
+      args.path === "/404.html"
+        ? { storageUrl: "https://storage.example/404", contentType: "text/html; charset=utf-8", etag: '"nf"' }
+        : null,
+    );
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("boom", { status: 500 })));
+
+    const response = await invokeHandler(handler, runQuery, new Request("https://app.convex.site/missing.js"));
+
+    expect(response.status).toBe(404);
+    expect(response.headers.get("Content-Type")).toBe("text/plain");
+    expect(await response.text()).toBe("Not Found");
+  });
+});
+

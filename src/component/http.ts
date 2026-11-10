@@ -8,6 +8,8 @@ import {
   getSetupHtml,
   resolveContentType,
   isHtmlContentType,
+  NOT_FOUND_PAGE_HEADERS,
+  NOT_FOUND_PAGE_PATH,
 } from "./serving.js";
 
 // CONVEX_SITE_URL reflects the component's mount point (including any httpPrefix).
@@ -60,6 +62,18 @@ const serveStaticFile = httpAction(async (ctx, request) => {
           "Cache-Control": "no-store",
           "Retry-After": "5",
         },
+      });
+    }
+    const notFoundPage = await ctx.runQuery(internal.lib.resolveAsset, {
+      path: NOT_FOUND_PAGE_PATH,
+    });
+    const notFoundBlob = notFoundPage?.storageId
+      ? await ctx.storage.get(notFoundPage.storageId)
+      : null;
+    if (notFoundBlob) {
+      return new Response(notFoundBlob, {
+        status: 404,
+        headers: NOT_FOUND_PAGE_HEADERS,
       });
     }
     return new Response("Not Found", {

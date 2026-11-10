@@ -80,6 +80,18 @@ export function getSetupHtml(): string {
 </html>`;
 }
 
+/**
+ * An app-supplied not-found page. When it exists, a miss is answered with its
+ * contents and status 404, instead of plain text.
+ */
+export const NOT_FOUND_PAGE_PATH = "/404.html";
+
+export const NOT_FOUND_PAGE_HEADERS = {
+  "Content-Type": "text/html; charset=utf-8",
+  "Cache-Control": "public, max-age=0, must-revalidate",
+  "X-Content-Type-Options": "nosniff",
+};
+
 export function hasFileExtension(path: string): boolean {
   const lastSegment = path.split("/").pop() || "";
   return lastSegment.includes(".") && !lastSegment.startsWith(".");

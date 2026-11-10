@@ -12,6 +12,8 @@ import {
   getSetupHtml,
   resolveContentType,
   isHtmlContentType,
+  NOT_FOUND_PAGE_HEADERS,
+  NOT_FOUND_PAGE_PATH,
 } from "../component/serving.js";
 
 const deploymentInfoValidator = v.object({
@@ -99,6 +101,19 @@ export function registerStaticRoutes(
             "Retry-After": "5",
           },
         });
+      }
+      const notFoundPage = await ctx.runQuery(
+        component.lib.resolveAssetForHttp,
+        { path: NOT_FOUND_PAGE_PATH },
+      );
+      if (notFoundPage?.storageUrl) {
+        const upstream = await fetch(notFoundPage.storageUrl);
+        if (upstream.ok && upstream.body) {
+          return new Response(upstream.body, {
+            status: 404,
+            headers: NOT_FOUND_PAGE_HEADERS,
+          });
+        }
       }
       return new Response("Not Found", {
         status: 404,
