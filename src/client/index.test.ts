@@ -91,6 +91,7 @@ describe("registerStaticRoutes", () => {
       storageUrl: "https://storage.example/ep.mp3",
       contentType: "audio/mpeg",
       etag: '"storage-id"',
+      size: 10,
     });
     vi.stubGlobal(
       "fetch",
@@ -115,6 +116,7 @@ describe("registerStaticRoutes", () => {
       storageUrl: "https://storage.example/ep.mp3",
       contentType: "audio/mpeg",
       etag: '"storage-id"',
+      size: 10,
     });
     const fetchMock = vi
       .fn()
@@ -358,6 +360,7 @@ describe("storage-URL Range passthrough", () => {
     storageUrl: "https://storage.example/ep.mp3",
     contentType: "audio/mpeg",
     etag: '"storage-id"',
+    size: 10,
   };
 
   test("passes a storage 206 through with its Content-Range and Accept-Ranges", async () => {
@@ -447,6 +450,7 @@ describe("storage Accept-Ranges advertisement", () => {
       storageUrl: "https://storage.example/ep.mp3",
       contentType: "audio/mpeg",
       etag: '"storage-id"',
+      size: 10,
     });
     vi.stubGlobal(
       "fetch",
@@ -463,6 +467,89 @@ describe("storage Accept-Ranges advertisement", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("Accept-Ranges")).toBeNull();
+  });
+});
+
+describe("Range resolution through registerStaticRoutes", () => {
+  const storedFile = {
+    storageUrl: "https://storage.example/ep.mp3",
+    contentType: "audio/mpeg",
+    etag: '"storage-id"',
+    size: 10,
+  };
+
+  test("a suffix Range is resolved against the size and forwarded as an explicit range", async () => {
+    const handler = staticHandler();
+    const runQuery = vi.fn().mockResolvedValue(storedFile);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response("789", { status: 206 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await invokeHandler(
+      handler,
+      runQuery,
+      new Request("https://app.convex.site/ep.mp3", {
+        headers: { Range: "bytes=-3" },
+      }),
+    );
+
+    expect(response.status).toBe(206);
+    expect(response.headers.get("Content-Range")).toBe("bytes 7-9/10");
+    expect(await response.text()).toBe("789");
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined;
+    expect(new Headers(init?.headers).get("Range")).toBe("bytes=7-9");
+  });
+
+  test("an out-of-bounds Range is answered with 416 without reading storage", async () => {
+    const handler = staticHandler();
+    const runQuery = vi.fn().mockResolvedValue(storedFile);
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await invokeHandler(
+      handler,
+      runQuery,
+      new Request("https://app.convex.site/ep.mp3", {
+        headers: { Range: "bytes=50-" },
+      }),
+    );
+
+    expect(response.status).toBe(416);
+    expect(response.headers.get("Content-Range")).toBe("bytes */10");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("malformed storage responses", () => {
+  test("a malformed upstream 206 does not reach the response; Content-Range is built locally", async () => {
+    const handler = staticHandler();
+    const runQuery = vi.fn().mockResolvedValue({
+      storageUrl: "https://storage.example/ep.mp3",
+      contentType: "audio/mpeg",
+      etag: '"storage-id"',
+      size: 10,
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response("789", {
+          status: 206,
+          headers: { "Content-Range": "bytes 18446744073709551612-9/10" },
+        }),
+      ),
+    );
+
+    const response = await invokeHandler(
+      handler,
+      runQuery,
+      new Request("https://app.convex.site/ep.mp3", {
+        headers: { Range: "bytes=-3" },
+      }),
+    );
+
+    expect(response.status).toBe(206);
+    expect(response.headers.get("Content-Range")).toBe("bytes 7-9/10");
   });
 });
 

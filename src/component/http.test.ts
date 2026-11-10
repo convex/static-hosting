@@ -198,7 +198,41 @@ describe("static file serving", () => {
   });
 });
 
+/**
+ * Stand-in for Convex storage at the URL returned by `getUrl`. It answers a
+ * single byte range the way storage does, so the streaming path is exercised
+ * without network access. It does not prove real storage behavior.
+ */
+function stubStorageFetch(body: string) {
+  const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+    const range = new Headers(init?.headers).get("Range");
+    const match = range?.match(/^bytes=(\d+)-(\d*)$/i);
+    if (!match) return new Response(body, { status: 200 });
+    const start = Number(match[1]);
+    if (start >= body.length) {
+      return new Response(null, {
+        status: 416,
+        headers: { "Content-Range": `bytes */${body.length}` },
+      });
+    }
+    const end =
+      match[2] === ""
+        ? body.length - 1
+        : Math.min(Number(match[2]), body.length - 1);
+    return new Response(body.slice(start, end + 1), {
+      status: 206,
+      headers: { "Content-Range": `bytes ${start}-${end}/${body.length}` },
+    });
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
+
 describe("media serving", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   test("stored octet-stream mp3 is served as audio/mpeg with range support", async () => {
     const t = initConvexTest();
     await storeAsset(
@@ -208,19 +242,26 @@ describe("media serving", () => {
       "text/html; charset=utf-8",
     );
     await storeAsset(t, "/ep1.mp3", "0123456789", "application/octet-stream");
+    const storage = stubStorageFetch("0123456789");
 
     const full = await t.fetch("/ep1.mp3", {});
     expect(full.status).toBe(200);
     expect(full.headers.get("Content-Type")).toBe("audio/mpeg");
     expect(full.headers.get("Accept-Ranges")).toBe("bytes");
+    expect(storage).not.toHaveBeenCalled();
 
     const part = await t.fetch("/ep1.mp3", { headers: { Range: "bytes=2-4" } });
     expect(part.status).toBe(206);
     expect(part.headers.get("Content-Range")).toBe("bytes 2-4/10");
     expect(await part.text()).toBe("234");
+    expect(storage).toHaveBeenCalledTimes(1);
+    expect(storage.mock.calls[0]?.[1]).toMatchObject({
+      headers: { Range: "bytes=2-4" },
+    });
 
     const bad = await t.fetch("/ep1.mp3", { headers: { Range: "bytes=50-" } });
     expect(bad.status).toBe(416);
+    expect(bad.headers.get("Content-Range")).toBe("bytes */10");
     expect(bad.headers.get("X-Content-Type-Options")).toBe("nosniff");
     expect(bad.headers.get("Cache-Control")).toBe("no-store");
     expect(bad.headers.get("ETag")).toBeTruthy();
@@ -229,6 +270,7 @@ describe("media serving", () => {
   test("If-Range with a stale validator ignores Range and serves the full body", async () => {
     const t = initConvexTest();
     await storeAsset(t, "/ep2.mp3", "0123456789", "application/octet-stream");
+    const storage = stubStorageFetch("0123456789");
 
     const full = await t.fetch("/ep2.mp3", {});
     const etag = full.headers.get("ETag")!;
@@ -238,17 +280,20 @@ describe("media serving", () => {
     });
     expect(stale.status).toBe(200);
     expect(await stale.text()).toBe("0123456789");
+    expect(storage).not.toHaveBeenCalled();
 
     const current = await t.fetch("/ep2.mp3", {
       headers: { Range: "bytes=2-4", "If-Range": etag },
     });
     expect(current.status).toBe(206);
     expect(await current.text()).toBe("234");
+    expect(storage).toHaveBeenCalledTimes(1);
   });
 
   test("Range unit names are case-insensitive", async () => {
     const t = initConvexTest();
     await storeAsset(t, "/ep3.mp3", "0123456789", "application/octet-stream");
+    stubStorageFetch("0123456789");
 
     const res = await t.fetch("/ep3.mp3", { headers: { Range: "Bytes=2-4" } });
     expect(res.status).toBe(206);
@@ -396,6 +441,33 @@ describe("range header edge cases", () => {
     expect(ifRangeMatches('W/"e"', '"e"')).toBe(false);
     expect(ifRangeMatches("Wed, 21 Oct 2015 07:28:00 GMT", '"e"')).toBe(false);
     expect(ifRangeMatches('"e"', undefined)).toBe(false);
+  });
+});
+
+describe("Range resolution in the component handler", () => {
+  test("a suffix Range is resolved against the size and forwarded as an explicit range", async () => {
+    const t = initConvexTest();
+    await storeAsset(t, "/ep5.mp3", "0123456789", "application/octet-stream");
+    const storage = stubStorageFetch("0123456789");
+
+    const res = await t.fetch("/ep5.mp3", { headers: { Range: "bytes=-3" } });
+    expect(res.status).toBe(206);
+    expect(res.headers.get("Content-Range")).toBe("bytes 7-9/10");
+    expect(await res.text()).toBe("789");
+    expect(storage.mock.calls[0]?.[1]).toMatchObject({
+      headers: { Range: "bytes=7-9" },
+    });
+  });
+
+  test("an out-of-bounds Range is answered with 416 without reading storage", async () => {
+    const t = initConvexTest();
+    await storeAsset(t, "/ep6.mp3", "0123456789", "application/octet-stream");
+    const storage = stubStorageFetch("0123456789");
+
+    const res = await t.fetch("/ep6.mp3", { headers: { Range: "bytes=50-" } });
+    expect(res.status).toBe(416);
+    expect(res.headers.get("Content-Range")).toBe("bytes */10");
+    expect(storage).not.toHaveBeenCalled();
   });
 });
 

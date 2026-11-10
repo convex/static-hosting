@@ -47,6 +47,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           blobId?: string;
           contentType: string;
           etag?: string;
+          size?: number;
           storageUrl?: string;
         } | null,
         Name
