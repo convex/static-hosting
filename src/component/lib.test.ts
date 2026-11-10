@@ -891,6 +891,30 @@ describe("component lib", () => {
       expect(asset?.contentType).toBe("text/html; charset=utf-8");
     });
 
+    test("returns the stored file size so Range can be resolved", async () => {
+      // The app-owned route resolves a Range against `size` before streaming;
+      // if it were omitted, Range would be silently ignored and a full 200
+      // served. Mocked runQuery tests can't catch that, so assert it here
+      // against real storage.
+      const t = initConvexTest();
+      const body = "<h1>Hello, range</h1>";
+      const storageId = await t.run(async (ctx) => {
+        return await ctx.storage.store(new Blob([body], { type: "text/html" }));
+      });
+      await t.mutation(internal.lib.recordAsset, {
+        path: "/index.html",
+        storageId,
+        contentType: "text/html; charset=utf-8",
+        deploymentId: "deploy-1",
+      });
+
+      const asset = await t.query(api.lib.resolveAssetForHttp, {
+        path: "/index.html",
+      });
+
+      expect(asset?.size).toBe(new TextEncoder().encode(body).byteLength);
+    });
+
     test("surfaces the app-owned storage id for inherited v1 rows", async () => {
       // A same-name v1→v2 migration inherits rows whose files live in the app's
       // storage; the component can't resolve a URL for them. convex-test can't
@@ -916,6 +940,7 @@ describe("component lib", () => {
       });
       expect(asset?.appStorageId).toBe(storageId);
       expect(asset?.storageUrl).toBeUndefined();
+      expect(asset?.size).toBeUndefined();
       expect(asset?.etag).toBe(`"${storageId}"`);
     });
 
