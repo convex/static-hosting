@@ -13,6 +13,7 @@ import {
   isHtmlContentType,
   NOT_FOUND_PAGE_HEADERS,
   NOT_FOUND_PAGE_PATH,
+  streamStorageResponse,
 } from "../component/serving.js";
 import {
   blobResponse,
@@ -223,56 +224,17 @@ export function registerStaticRoutes(
     // Forward Range so audio/video can seek; the storage response's 206 and
     // range headers are passed through below. A stale If-Range drops Range so
     // storage returns the full representation.
-    // Only a single byte range is forwarded. A multi-range header is ignored here,
-    // as the local parser does, so storage never frames a multipart body under the asset type.
-    const requestedRange = request.headers.get("Range");
-    const rangeHeader =
-      ifRangeMatches(request.headers.get("If-Range"), asset.etag) &&
-      requestedRange !== null &&
-      !requestedRange.includes(",")
-        ? requestedRange
-        : null;
-    const storageResponse = await fetch(
-      asset.storageUrl,
-      rangeHeader ? { headers: { Range: rangeHeader } } : undefined,
-    );
-    if (storageResponse.status === 416) {
-      const contentRange = storageResponse.headers.get("Content-Range");
-      return new Response(null, {
-        status: 416,
-        headers: {
-          "Cache-Control": "no-store",
-          "X-Content-Type-Options": "nosniff",
-          ...(asset.etag ? { ETag: asset.etag } : {}),
-          ...(contentRange ? { "Content-Range": contentRange } : {}),
-        },
-      });
-    }
-    if (!storageResponse.ok || !storageResponse.body) {
-      return new Response("Storage error", {
-        status: 500,
-        headers: { "Content-Type": "text/plain" },
-      });
-    }
-
-    const contentRange = storageResponse.headers.get("Content-Range");
-    // Advertise bytes only when storage actually lists it, so "none" does not count.
-    const storageAcceptsBytes = (storageResponse.headers.get("Accept-Ranges") ?? "")
-      .split(",")
-      .map((unit) => unit.trim().toLowerCase())
-      .includes("bytes");
-    const storageSupportsRanges =
-      storageResponse.status === 206 || storageAcceptsBytes;
-    return new Response(storageResponse.body, {
-      status: storageResponse.status === 206 ? 206 : 200,
-      headers: {
-        "Content-Type": contentType,
-        "Cache-Control": cacheControl,
-        ...(asset.etag ? { ETag: asset.etag } : {}),
-        "X-Content-Type-Options": "nosniff",
-        ...(storageSupportsRanges ? { "Accept-Ranges": "bytes" } : {}),
-        ...(contentRange ? { "Content-Range": contentRange } : {}),
-      },
+    const rangeHeader = ifRangeMatches(
+      request.headers.get("If-Range"),
+      asset.etag,
+    )
+      ? request.headers.get("Range")
+      : null;
+    return streamStorageResponse(asset.storageUrl, rangeHeader, asset.size, {
+      "Content-Type": contentType,
+      "Cache-Control": cacheControl,
+      ...(asset.etag ? { ETag: asset.etag } : {}),
+      "X-Content-Type-Options": "nosniff",
     });
   });
 

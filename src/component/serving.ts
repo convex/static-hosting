@@ -1,7 +1,9 @@
-// Pure, dependency-free helpers shared by the HTTP handler (http.ts) and the
-// asset-resolution query (lib.ts). Kept separate so lib.ts can reuse them
-// without importing the HTTP router. MIME and Range helpers live in
+// Helpers shared by the HTTP handler (http.ts), the app-owned client routes
+// and the asset-resolution query (lib.ts). Kept separate so lib.ts can reuse
+// them without importing the HTTP router. MIME and Range helpers live in
 // ../mime/mime.js and are imported from there directly.
+
+import { parseByteRange, rangeErrorHeaders } from "../mime/mime.js";
 
 export function getSetupHtml(): string {
   return `<!DOCTYPE html>
@@ -145,5 +147,74 @@ export function etagMatches(
     return (
       normalizedCandidate === "*" || normalizedCandidate === normalizedCurrent
     );
+  });
+}
+
+/**
+ * Fetch a Convex storage URL and stream the result, so a Range request reads
+ * only the requested bytes instead of buffering the whole file. `size` is the
+ * stored file's byte length. `headers` are the full-response headers (type,
+ * caching, ETag, ...).
+ *
+ * The range is resolved against `size` here. Storage answers suffix and
+ * out-of-bounds ranges with a malformed 206 instead of 416, so only an explicit
+ * satisfiable range is forwarded, and Content-Range is built locally. An
+ * unknown `size` ignores Range and serves the full body.
+ */
+export async function streamStorageResponse(
+  storageUrl: string,
+  rangeHeader: string | null,
+  size: number | undefined,
+  headers: Record<string, string>,
+): Promise<Response> {
+  const range =
+    size === undefined ? null : parseByteRange(rangeHeader, size);
+  if (range === "unsatisfiable") {
+    return new Response(null, {
+      status: 416,
+      headers: {
+        ...rangeErrorHeaders(headers),
+        "Content-Range": `bytes */${size}`,
+      },
+    });
+  }
+
+  const storageResponse = await fetch(
+    storageUrl,
+    range
+      ? { headers: { Range: `bytes=${range.start}-${range.end}` } }
+      : undefined,
+  );
+  if (!storageResponse.ok || !storageResponse.body) {
+    return new Response("Storage error", {
+      status: 500,
+      headers: { "Content-Type": "text/plain" },
+    });
+  }
+
+  // Serve 206 only when storage honored the explicit range we forwarded.
+  if (range && storageResponse.status === 206) {
+    return new Response(storageResponse.body, {
+      status: 206,
+      headers: {
+        ...headers,
+        "Accept-Ranges": "bytes",
+        "Content-Range": `bytes ${range.start}-${range.end}/${size}`,
+      },
+    });
+  }
+  // Advertise bytes only when storage lists it, so "none" does not count.
+  const storageSupportsRanges = (
+    storageResponse.headers.get("Accept-Ranges") ?? ""
+  )
+    .split(",")
+    .map((unit) => unit.trim().toLowerCase())
+    .includes("bytes");
+  return new Response(storageResponse.body, {
+    status: 200,
+    headers: {
+      ...headers,
+      ...(storageSupportsRanges ? { "Accept-Ranges": "bytes" } : {}),
+    },
   });
 }
