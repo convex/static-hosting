@@ -197,12 +197,15 @@ export function registerStaticRoutes(
     // Forward Range so audio/video can seek; the storage response's 206 and
     // range headers are passed through below. A stale If-Range drops Range so
     // storage returns the full representation.
-    const rangeHeader = ifRangeMatches(
-      request.headers.get("If-Range"),
-      asset.etag,
-    )
-      ? request.headers.get("Range")
-      : null;
+    // Only a single byte range is forwarded. A multi-range header is ignored here,
+    // as the local parser does, so storage never frames a multipart body under the asset type.
+    const requestedRange = request.headers.get("Range");
+    const rangeHeader =
+      ifRangeMatches(request.headers.get("If-Range"), asset.etag) &&
+      requestedRange !== null &&
+      !requestedRange.includes(",")
+        ? requestedRange
+        : null;
     const storageResponse = await fetch(
       asset.storageUrl,
       rangeHeader ? { headers: { Range: rangeHeader } } : undefined,
@@ -212,7 +215,7 @@ export function registerStaticRoutes(
       return new Response(null, {
         status: 416,
         headers: {
-          "Cache-Control": cacheControl,
+          "Cache-Control": "no-store",
           "X-Content-Type-Options": "nosniff",
           ...(asset.etag ? { ETag: asset.etag } : {}),
           ...(contentRange ? { "Content-Range": contentRange } : {}),

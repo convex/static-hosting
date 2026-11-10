@@ -411,7 +411,7 @@ describe("storage-URL Range passthrough", () => {
     expect(response.status).toBe(416);
     expect(response.headers.get("Content-Range")).toBe("bytes */10");
     expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
-    expect(response.headers.get("Cache-Control")).toBe("public, max-age=0, must-revalidate");
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
     expect(response.headers.get("ETag")).toBe('"storage-id"');
   });
 
@@ -463,5 +463,30 @@ describe("storage Accept-Ranges advertisement", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("Accept-Ranges")).toBeNull();
+  });
+});
+
+describe("storage passthrough with multi-range headers", () => {
+  test("a multi-range header is not forwarded to storage", async () => {
+    const handler = staticHandler();
+    const runQuery = vi.fn().mockResolvedValue({
+      storageUrl: "https://storage.example/ep.mp3",
+      contentType: "audio/mpeg",
+      etag: '"storage-id"',
+    });
+    const fetchMock = vi.fn().mockResolvedValue(new Response("0123456789"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await invokeHandler(
+      handler,
+      runQuery,
+      new Request("https://app.convex.site/ep.mp3", {
+        headers: { Range: "bytes=0-1,3-4" },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined;
+    expect(new Headers(init?.headers).get("Range")).toBeNull();
   });
 });

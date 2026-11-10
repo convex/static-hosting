@@ -107,16 +107,21 @@ export function parseByteRange(
 }
 
 /**
- * The validator and caching headers a 416 keeps from the full response, so a
- * range error is cacheable and nosniff-safe like the representation it refers to.
+ * Headers for a 416. The error is specific to one request, so it must not
+ * inherit the representation's caching policy: a shared cache could keep a
+ * range error under the asset URL and serve it to later valid requests.
+ * ETag and nosniff are kept; Cache-Control is always no-store.
  */
 export function rangeErrorHeaders(
   headers: Record<string, string>,
 ): Record<string, string> {
-  const keep = ["Cache-Control", "ETag", "X-Content-Type-Options"];
-  return Object.fromEntries(
-    Object.entries(headers).filter(([name]) => keep.includes(name)),
-  );
+  const keep = ["ETag", "X-Content-Type-Options"];
+  return {
+    ...Object.fromEntries(
+      Object.entries(headers).filter(([name]) => keep.includes(name)),
+    ),
+    "Cache-Control": "no-store",
+  };
 }
 
 /**

@@ -222,7 +222,7 @@ describe("media serving", () => {
     const bad = await t.fetch("/ep1.mp3", { headers: { Range: "bytes=50-" } });
     expect(bad.status).toBe(416);
     expect(bad.headers.get("X-Content-Type-Options")).toBe("nosniff");
-    expect(bad.headers.get("Cache-Control")).toBe(cacheControlFor("/ep1.mp3"));
+    expect(bad.headers.get("Cache-Control")).toBe("no-store");
     expect(bad.headers.get("ETag")).toBeTruthy();
   });
 
@@ -396,5 +396,17 @@ describe("range header edge cases", () => {
     expect(ifRangeMatches('W/"e"', '"e"')).toBe(false);
     expect(ifRangeMatches("Wed, 21 Oct 2015 07:28:00 GMT", '"e"')).toBe(false);
     expect(ifRangeMatches('"e"', undefined)).toBe(false);
+  });
+});
+
+describe("416 caching", () => {
+  test("an unsatisfiable Range on a hashed asset is never cached as immutable", async () => {
+    const t = initConvexTest();
+    await storeAsset(t, "/assets/index-B71cUw87.js", "console.log(1)", "application/javascript; charset=utf-8");
+
+    const res = await t.fetch("/assets/index-B71cUw87.js", { headers: { Range: "bytes=100-" } });
+    expect(res.status).toBe(416);
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
   });
 });
