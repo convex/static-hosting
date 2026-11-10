@@ -222,9 +222,13 @@ export function registerStaticRoutes(
     }
 
     const contentRange = storageResponse.headers.get("Content-Range");
+    // Advertise bytes only when storage actually lists it, so "none" does not count.
+    const storageAcceptsBytes = (storageResponse.headers.get("Accept-Ranges") ?? "")
+      .split(",")
+      .map((unit) => unit.trim().toLowerCase())
+      .includes("bytes");
     const storageSupportsRanges =
-      storageResponse.status === 206 ||
-      Boolean(storageResponse.headers.get("Accept-Ranges"));
+      storageResponse.status === 206 || storageAcceptsBytes;
     return new Response(storageResponse.body, {
       status: storageResponse.status === 206 ? 206 : 200,
       headers: {

@@ -13,6 +13,7 @@ import {
 } from "./serving.js";
 import {
   getMimeType,
+  ifRangeMatches,
   parseByteRange,
   resolveContentType,
 } from "../mime/mime.js";
@@ -376,5 +377,21 @@ describe("serving helpers", () => {
       vi.stubEnv("CONVEX_SITE_URL", "https://x.convex.site/app/");
       expect(getMountPrefix()).toBe("/app");
     });
+  });
+});
+
+describe("range header edge cases", () => {
+  test("parseByteRange ignores empty specs and non-bytes units", () => {
+    expect(parseByteRange("bytes=-", 10)).toBeNull();
+    expect(parseByteRange("bytes=", 10)).toBeNull();
+    expect(parseByteRange("items=0-1", 10)).toBeNull();
+  });
+
+  test("ifRangeMatches requires a strong, present, matching validator", () => {
+    expect(ifRangeMatches(null, '"e"')).toBe(true);
+    expect(ifRangeMatches('"e"', '"e"')).toBe(true);
+    expect(ifRangeMatches('W/"e"', '"e"')).toBe(false);
+    expect(ifRangeMatches("Wed, 21 Oct 2015 07:28:00 GMT", '"e"')).toBe(false);
+    expect(ifRangeMatches('"e"', undefined)).toBe(false);
   });
 });
