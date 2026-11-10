@@ -49,8 +49,9 @@ const serveStaticFile = httpAction(async (ctx, request) => {
 
   // One query resolves the asset: an exact match, or, when SPA fallback is
   // enabled for the current deployment, the index.html asset for an
-  // extension-less miss. The fallback lookup happens inside the query so the
-  // HTTP action never makes a second round-trip.
+  // extension-less miss. The fallback lookup happens inside the query, so a
+  // hit costs a single round-trip. Only a miss makes a second query, for the
+  // app's 404.html.
   const asset = await ctx.runQuery(internal.lib.resolveAsset, { path });
 
   if (!asset) {

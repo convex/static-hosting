@@ -292,8 +292,18 @@ describe("serving helpers", () => {
 describe("app 404 page", () => {
   test("a miss with an app 404 page is answered with that page and status 404", async () => {
     const t = initConvexTest();
-    await storeAsset(t, "/index.html", "<!doctype html>", "text/html; charset=utf-8");
-    await storeAsset(t, "/404.html", "<h1>Gone</h1>", "text/html; charset=utf-8");
+    await storeAsset(
+      t,
+      "/index.html",
+      "<!doctype html>",
+      "text/html; charset=utf-8",
+    );
+    await storeAsset(
+      t,
+      "/404.html",
+      "<h1>Gone</h1>",
+      "text/html; charset=utf-8",
+    );
 
     const res = await t.fetch("/missing.js", {});
     expect(res.status).toBe(404);
@@ -304,8 +314,18 @@ describe("app 404 page", () => {
 
   test("SPA fallback still serves index.html for an extension-less miss", async () => {
     const t = initConvexTest();
-    await storeAsset(t, "/index.html", "<!doctype html>", "text/html; charset=utf-8");
-    await storeAsset(t, "/404.html", "<h1>Gone</h1>", "text/html; charset=utf-8");
+    await storeAsset(
+      t,
+      "/index.html",
+      "<!doctype html>",
+      "text/html; charset=utf-8",
+    );
+    await storeAsset(
+      t,
+      "/404.html",
+      "<h1>Gone</h1>",
+      "text/html; charset=utf-8",
+    );
 
     const res = await t.fetch("/dashboard", {});
     expect(res.status).toBe(200);
@@ -314,8 +334,18 @@ describe("app 404 page", () => {
 
   test("with SPA fallback off, an extension-less miss gets the app 404 page", async () => {
     const t = initConvexTest();
-    await storeAsset(t, "/index.html", "<!doctype html>", "text/html; charset=utf-8");
-    await storeAsset(t, "/404.html", "<h1>Gone</h1>", "text/html; charset=utf-8");
+    await storeAsset(
+      t,
+      "/index.html",
+      "<!doctype html>",
+      "text/html; charset=utf-8",
+    );
+    await storeAsset(
+      t,
+      "/404.html",
+      "<h1>Gone</h1>",
+      "text/html; charset=utf-8",
+    );
     await t.mutation(internal.lib.commitDeployment, {
       currentDeploymentId: "deploy-1",
       spaFallback: false,
@@ -328,7 +358,12 @@ describe("app 404 page", () => {
 
   test("without an app 404 page, a miss keeps the plain-text 404", async () => {
     const t = initConvexTest();
-    await storeAsset(t, "/index.html", "<!doctype html>", "text/html; charset=utf-8");
+    await storeAsset(
+      t,
+      "/index.html",
+      "<!doctype html>",
+      "text/html; charset=utf-8",
+    );
 
     const res = await t.fetch("/missing.js", {});
     expect(res.status).toBe(404);
@@ -340,7 +375,12 @@ describe("app 404 page", () => {
 describe("app 404 page fallbacks", () => {
   test("a 404 page stored as a blob without a storage ID falls back to plain text", async () => {
     const t = initConvexTest();
-    await storeAsset(t, "/index.html", "<!doctype html>", "text/html; charset=utf-8");
+    await storeAsset(
+      t,
+      "/index.html",
+      "<!doctype html>",
+      "text/html; charset=utf-8",
+    );
     await t.mutation(internal.lib.recordAsset, {
       path: "/404.html",
       blobId: "blob-404",
@@ -354,4 +394,3 @@ describe("app 404 page fallbacks", () => {
     expect(await res.text()).toBe("Not Found");
   });
 });
-
