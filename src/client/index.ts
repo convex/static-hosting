@@ -106,9 +106,20 @@ export function registerStaticRoutes(
         component.lib.resolveAssetForHttp,
         { path: NOT_FOUND_PAGE_PATH },
       );
+      if (notFoundPage?.appStorageId) {
+        const blob = await ctx.storage.get(
+          notFoundPage.appStorageId as GenericId<"_storage">,
+        );
+        if (blob) {
+          return new Response(blob, {
+            status: 404,
+            headers: NOT_FOUND_PAGE_HEADERS,
+          });
+        }
+      }
       if (notFoundPage?.storageUrl) {
-        const upstream = await fetch(notFoundPage.storageUrl);
-        if (upstream.ok && upstream.body) {
+        const upstream = await fetch(notFoundPage.storageUrl).catch(() => null);
+        if (upstream?.ok && upstream.body) {
           return new Response(upstream.body, {
             status: 404,
             headers: NOT_FOUND_PAGE_HEADERS,

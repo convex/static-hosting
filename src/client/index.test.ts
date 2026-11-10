@@ -342,9 +342,65 @@ describe("app 404 page through registerStaticRoutes", () => {
     expect(response.headers.get("Content-Type")).toBe("text/plain");
     expect(await response.text()).toBe("Not Found");
   });
+
+  test.each([true, false])(
+    "an inherited app-storage 404 page falls back when missing: %s",
+    async (missing) => {
+      const handler = staticHandler();
+      const runQuery = vi.fn(async (_fn: unknown, args: { path: string }) =>
+        args.path === "/404.html" ? { appStorageId: "legacy-id" } : null,
+      );
+      const get = vi.fn().mockResolvedValue(
+        missing ? null : new Blob(["<h1>Gone</h1>"]),
+      );
+      const fetchMock = vi.fn();
+      vi.stubGlobal("fetch", fetchMock);
+
+      const response = await (handler as unknown as {
+        _handler: (
+          ctx: { runQuery: typeof runQuery; storage: { get: typeof get } },
+          request: Request,
+        ) => Promise<Response>;
+      })._handler(
+        { runQuery, storage: { get } },
+        new Request("https://app.convex.site/missing.js"),
+      );
+
+      expect(get).toHaveBeenCalledWith("legacy-id");
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(response.status).toBe(404);
+      expect(response.headers.get("Content-Type")).toBe(
+        missing ? "text/plain" : "text/html; charset=utf-8",
+      );
+      if (!missing) {
+        expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
+      }
+      expect(await response.text()).toBe(missing ? "Not Found" : "<h1>Gone</h1>");
+    },
+  );
 });
 
 describe("app 404 page upstream failure", () => {
+  test("a rejected fetch for the 404 page falls back to plain text", async () => {
+    const handler = staticHandler();
+    const runQuery = vi.fn(async (_fn: unknown, args: { path: string }) =>
+      args.path === "/404.html"
+        ? { storageUrl: "https://storage.example/404" }
+        : null,
+    );
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("fetch failed")));
+
+    const response = await invokeHandler(
+      handler,
+      runQuery,
+      new Request("https://app.convex.site/missing.js"),
+    );
+
+    expect(response.status).toBe(404);
+    expect(response.headers.get("Content-Type")).toBe("text/plain");
+    expect(await response.text()).toBe("Not Found");
+  });
+
   test("a failed upstream fetch for the 404 page falls back to plain text", async () => {
     const handler = staticHandler();
     const runQuery = vi.fn(async (_fn: unknown, args: { path: string }) =>
