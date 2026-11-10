@@ -691,6 +691,59 @@ describe("malformed storage responses", () => {
   });
 });
 
+describe("inherited app storage Range handling", () => {
+  function appStorageCtx() {
+    const storage = {
+      getUrl: vi.fn().mockResolvedValue("https://storage.example/app-1"),
+      getMetadata: vi.fn().mockResolvedValue({ size: 10 }),
+      get: vi.fn().mockResolvedValue(new Blob(["0123456789"])),
+    };
+    const runQuery = vi.fn().mockResolvedValue({
+      appStorageId: "app-1",
+      contentType: "audio/mpeg",
+      etag: '"app-1"',
+    });
+    return { storage, runQuery };
+  }
+
+  test("a Range request streams from app storage without loading the blob", async () => {
+    const handler = staticHandler();
+    const { storage, runQuery } = appStorageCtx();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response("789", { status: 206 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await (handler as unknown as TestHttpAction)._handler(
+      { runQuery, storage } as unknown as { runQuery: ReturnType<typeof vi.fn> },
+      new Request("https://app.convex.site/legacy.mp3", {
+        headers: { Range: "bytes=-3" },
+      }),
+    );
+
+    expect(response.status).toBe(206);
+    expect(response.headers.get("Content-Range")).toBe("bytes 7-9/10");
+    expect(await response.text()).toBe("789");
+    expect(storage.get).not.toHaveBeenCalled();
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined;
+    expect(new Headers(init?.headers).get("Range")).toBe("bytes=7-9");
+  });
+
+  test("a full response still reads the blob from app storage", async () => {
+    const handler = staticHandler();
+    const { storage, runQuery } = appStorageCtx();
+
+    const response = await (handler as unknown as TestHttpAction)._handler(
+      { runQuery, storage } as unknown as { runQuery: ReturnType<typeof vi.fn> },
+      new Request("https://app.convex.site/legacy.mp3"),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("0123456789");
+    expect(storage.get).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("storage passthrough with multi-range headers", () => {
   test("a multi-range header is not forwarded to storage", async () => {
     const handler = staticHandler();
