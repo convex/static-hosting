@@ -410,6 +410,9 @@ describe("storage-URL Range passthrough", () => {
 
     expect(response.status).toBe(416);
     expect(response.headers.get("Content-Range")).toBe("bytes */10");
+    expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    expect(response.headers.get("Cache-Control")).toBe("public, max-age=0, must-revalidate");
+    expect(response.headers.get("ETag")).toBe('"storage-id"');
   });
 
   test("forwards Range when If-Range matches the current ETag", async () => {

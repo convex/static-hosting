@@ -221,6 +221,9 @@ describe("media serving", () => {
 
     const bad = await t.fetch("/ep1.mp3", { headers: { Range: "bytes=50-" } });
     expect(bad.status).toBe(416);
+    expect(bad.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    expect(bad.headers.get("Cache-Control")).toBe(cacheControlFor("/ep1.mp3"));
+    expect(bad.headers.get("ETag")).toBeTruthy();
   });
 
   test("If-Range with a stale validator ignores Range and serves the full body", async () => {

@@ -211,7 +211,12 @@ export function registerStaticRoutes(
       const contentRange = storageResponse.headers.get("Content-Range");
       return new Response(null, {
         status: 416,
-        ...(contentRange ? { headers: { "Content-Range": contentRange } } : {}),
+        headers: {
+          "Cache-Control": cacheControl,
+          "X-Content-Type-Options": "nosniff",
+          ...(asset.etag ? { ETag: asset.etag } : {}),
+          ...(contentRange ? { "Content-Range": contentRange } : {}),
+        },
       });
     }
     if (!storageResponse.ok || !storageResponse.body) {
