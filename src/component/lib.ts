@@ -40,6 +40,7 @@ const ABANDONED_UPLOAD_AGE_MS = 24 * 60 * 60 * 1000;
 
 const httpAssetValidator = v.object({
   storageUrl: v.optional(v.string()),
+  size: v.optional(v.number()),
   blobId: v.optional(v.string()),
   contentType: v.string(),
   etag: v.optional(v.string()),
@@ -155,8 +156,15 @@ export const resolveAssetForHttp = query({
         ? asset.storageId
         : undefined;
 
+    // Size lets the app-owned route resolve a Range before streaming storage.
+    const size =
+      asset.storageId && storageUrl
+        ? (await ctx.db.system.get("_storage", asset.storageId))?.size
+        : undefined;
+
     return {
       ...(storageUrl ? { storageUrl } : {}),
+      ...(size !== undefined ? { size } : {}),
       ...(appStorageId ? { appStorageId } : {}),
       ...(asset.blobId ? { blobId: asset.blobId } : {}),
       contentType: asset.contentType,
@@ -203,6 +211,17 @@ export const resolveAsset = internalQuery({
   returns: v.union(staticAssetValidator, v.null()),
   handler: async (ctx, { path }) => {
     return await resolveAssetDocument(ctx, path);
+  },
+});
+
+// Byte length of a stored file, from the storage system table. The HTTP action
+// needs it to resolve a Range request before streaming from storage.
+export const getStorageSize = internalQuery({
+  args: { storageId: v.id("_storage") },
+  returns: v.union(v.number(), v.null()),
+  handler: async (ctx, { storageId }) => {
+    const metadata = await ctx.db.system.get("_storage", storageId);
+    return metadata?.size ?? null;
   },
 });
 
