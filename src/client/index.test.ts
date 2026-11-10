@@ -768,3 +768,65 @@ describe("storage passthrough with multi-range headers", () => {
     expect(new Headers(init?.headers).get("Range")).toBeNull();
   });
 });
+
+describe("inherited app storage Range edge cases", () => {
+  function inheritedCtx(overrides: { url?: string | null; metadata?: unknown } = {}) {
+    const storage = {
+      getUrl: vi.fn().mockResolvedValue(
+        overrides.url === undefined ? "https://storage.example/app-1" : overrides.url,
+      ),
+      getMetadata: vi.fn().mockResolvedValue(
+        overrides.metadata === undefined ? { size: 10 } : overrides.metadata,
+      ),
+      get: vi.fn().mockResolvedValue(new Blob(["0123456789"])),
+    };
+    const runQuery = vi.fn().mockResolvedValue({
+      appStorageId: "app-1",
+      contentType: "audio/mpeg",
+      etag: '"app-1"',
+    });
+    return { storage, runQuery };
+  }
+
+  function call(handler: unknown, ctx: object, request: Request) {
+    return (handler as unknown as { _handler: (c: object, r: Request) => Promise<Response> })._handler(ctx, request);
+  }
+
+  test("a stale If-Range with Range serves the full body from the blob, not storage", async () => {
+    const handler = staticHandler();
+    const { storage, runQuery } = inheritedCtx();
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await call(handler, { runQuery, storage }, new Request(
+      "https://app.convex.site/legacy.mp3",
+      { headers: { Range: "bytes=2-4", "If-Range": '"stale"' } },
+    ));
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("0123456789");
+    expect(storage.get).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ["no storage URL", { url: null }],
+    ["no metadata", { metadata: null }],
+  ])("a satisfiable Range with %s is served from the blob", async (_name, overrides) => {
+    const handler = staticHandler();
+    const { storage, runQuery } = inheritedCtx(overrides);
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await call(handler, { runQuery, storage }, new Request(
+      "https://app.convex.site/legacy.mp3",
+      { headers: { Range: "bytes=2-4" } },
+    ));
+
+    expect(response.status).toBe(206);
+    expect(response.headers.get("Content-Range")).toBe("bytes 2-4/10");
+    expect(await response.text()).toBe("234");
+    expect(storage.get).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
