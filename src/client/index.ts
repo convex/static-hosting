@@ -142,9 +142,30 @@ export function registerStaticRoutes(
           headers: { ETag: asset.etag, "Cache-Control": cacheControl },
         });
       }
-      const blob = await ctx.storage.get(
-        asset.appStorageId as GenericId<"_storage">,
-      );
+      // A Range request streams from app storage so a seek does not load the
+      // whole file. Full responses, and a file without a storage URL, keep the
+      // blob path. A stale If-Range drops Range, which that path serves as 200.
+      const appStorageId = asset.appStorageId as GenericId<"_storage">;
+      const rangeHeader = ifRangeMatches(
+        request.headers.get("If-Range"),
+        asset.etag,
+      )
+        ? request.headers.get("Range")
+        : null;
+      if (rangeHeader) {
+        const storageUrl = await ctx.storage.getUrl(appStorageId);
+        const metadata = await ctx.storage.getMetadata(appStorageId);
+        if (storageUrl && metadata) {
+          return streamStorageResponse(storageUrl, rangeHeader, metadata.size, {
+            "Content-Type": contentType,
+            "Cache-Control": cacheControl,
+            ...(asset.etag ? { ETag: asset.etag } : {}),
+            "X-Content-Type-Options": "nosniff",
+          });
+        }
+      }
+
+      const blob = await ctx.storage.get(appStorageId);
       if (!blob) {
         // The component surfaces appStorageId whenever it can't resolve a
         // storage URL, which also covers a genuinely deleted file (the two are
