@@ -9,8 +9,13 @@ import {
   isHtmlContentType,
   NOT_FOUND_PAGE_HEADERS,
   NOT_FOUND_PAGE_PATH,
+  streamStorageResponse,
 } from "./serving.js";
-import { blobResponse, resolveContentType } from "../mime/mime.js";
+import {
+  blobResponse,
+  ifRangeMatches,
+  resolveContentType,
+} from "../mime/mime.js";
 
 // CONVEX_SITE_URL reflects the component's mount point (including any httpPrefix).
 // We use it to strip the prefix from incoming request paths so lookups in
@@ -116,6 +121,29 @@ const serveStaticFile = httpAction(async (ctx, request) => {
     });
   }
 
+  const headers = {
+    "Content-Type": contentType,
+    "Cache-Control": cacheControl,
+    ETag: etag,
+    "X-Content-Type-Options": "nosniff",
+  };
+
+  // A Range request streams from the storage URL so a seek reads only the
+  // requested bytes. Full responses still load the blob. A stale If-Range
+  // drops Range, which the blob path then serves as a full 200.
+  const rangeHeader = ifRangeMatches(request.headers.get("If-Range"), etag)
+    ? request.headers.get("Range")
+    : null;
+  if (rangeHeader) {
+    const storageUrl = await ctx.storage.getUrl(asset.storageId);
+    const size = await ctx.runQuery(internal.lib.getStorageSize, {
+      storageId: asset.storageId,
+    });
+    if (storageUrl && size !== null) {
+      return streamStorageResponse(storageUrl, rangeHeader, size, headers);
+    }
+  }
+
   const blob = await ctx.storage.get(asset.storageId);
   if (!blob) {
     // A same-name v1 to v2 migration can temporarily inherit an index row that
@@ -139,12 +167,7 @@ const serveStaticFile = httpAction(async (ctx, request) => {
 
   return blobResponse(
     blob,
-    {
-      "Content-Type": contentType,
-      "Cache-Control": cacheControl,
-      ETag: etag,
-      "X-Content-Type-Options": "nosniff",
-    },
+    headers,
     request.headers.get("Range"),
     request.headers.get("If-Range"),
   );
