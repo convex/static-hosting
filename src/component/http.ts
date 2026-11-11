@@ -11,11 +11,7 @@ import {
   NOT_FOUND_PAGE_PATH,
   streamStorageResponse,
 } from "./serving.js";
-import {
-  blobResponse,
-  ifRangeMatches,
-  resolveContentType,
-} from "../mime/mime.js";
+import { blobResponse, resolveContentType } from "../mime/mime.js";
 
 // CONVEX_SITE_URL reflects the component's mount point (including any httpPrefix).
 // We use it to strip the prefix from incoming request paths so lookups in
@@ -129,18 +125,21 @@ const serveStaticFile = httpAction(async (ctx, request) => {
   };
 
   // A Range request streams from the storage URL so a seek reads only the
-  // requested bytes. Full responses still load the blob. A stale If-Range
-  // drops Range, which the blob path then serves as a full 200.
-  const rangeHeader = ifRangeMatches(request.headers.get("If-Range"), etag)
-    ? request.headers.get("Range")
-    : null;
+  // requested bytes. Full responses still load the blob.
+  const rangeHeader = request.headers.get("Range");
   if (rangeHeader) {
     const storageUrl = await ctx.storage.getUrl(asset.storageId);
     const size = await ctx.runQuery(internal.lib.getStorageSize, {
       storageId: asset.storageId,
     });
     if (storageUrl && size !== null) {
-      return streamStorageResponse(storageUrl, rangeHeader, size, headers);
+      return streamStorageResponse(
+        storageUrl,
+        rangeHeader,
+        request.headers.get("If-Range"),
+        size,
+        headers,
+      );
     }
   }
 

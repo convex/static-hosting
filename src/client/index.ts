@@ -15,11 +15,7 @@ import {
   NOT_FOUND_PAGE_PATH,
   streamStorageResponse,
 } from "../component/serving.js";
-import {
-  blobResponse,
-  ifRangeMatches,
-  resolveContentType,
-} from "../mime/mime.js";
+import { blobResponse, resolveContentType } from "../mime/mime.js";
 
 const deploymentInfoValidator = v.object({
   _id: v.string(),
@@ -170,24 +166,25 @@ export function registerStaticRoutes(
       }
       // A Range request streams from app storage so a seek does not load the
       // whole file. Full responses, and a file without a storage URL, keep the
-      // blob path. A stale If-Range drops Range, which that path serves as 200.
+      // blob path.
       const appStorageId = asset.appStorageId as GenericId<"_storage">;
-      const rangeHeader = ifRangeMatches(
-        request.headers.get("If-Range"),
-        asset.etag,
-      )
-        ? request.headers.get("Range")
-        : null;
+      const rangeHeader = request.headers.get("Range");
       if (rangeHeader) {
         const storageUrl = await ctx.storage.getUrl(appStorageId);
         const metadata = await ctx.storage.getMetadata(appStorageId);
         if (storageUrl && metadata) {
-          return streamStorageResponse(storageUrl, rangeHeader, metadata.size, {
-            "Content-Type": contentType,
-            "Cache-Control": cacheControl,
-            ...(asset.etag ? { ETag: asset.etag } : {}),
-            "X-Content-Type-Options": "nosniff",
-          });
+          return streamStorageResponse(
+            storageUrl,
+            rangeHeader,
+            request.headers.get("If-Range"),
+            metadata.size,
+            {
+              "Content-Type": contentType,
+              "Cache-Control": cacheControl,
+              ...(asset.etag ? { ETag: asset.etag } : {}),
+              "X-Content-Type-Options": "nosniff",
+            },
+          );
         }
       }
 
@@ -242,21 +239,21 @@ export function registerStaticRoutes(
       });
     }
 
-    // Forward Range so audio/video can seek; the storage response's 206 and
-    // range headers are passed through below. A stale If-Range drops Range so
-    // storage returns the full representation.
-    const rangeHeader = ifRangeMatches(
+    // Resolve Range against the stored size so audio/video can seek, and
+    // forward only an explicit satisfiable range to storage. Content-Range is
+    // built locally, and a stale If-Range drops Range and serves the full body.
+    return streamStorageResponse(
+      asset.storageUrl,
+      request.headers.get("Range"),
       request.headers.get("If-Range"),
-      asset.etag,
-    )
-      ? request.headers.get("Range")
-      : null;
-    return streamStorageResponse(asset.storageUrl, rangeHeader, asset.size, {
-      "Content-Type": contentType,
-      "Cache-Control": cacheControl,
-      ...(asset.etag ? { ETag: asset.etag } : {}),
-      "X-Content-Type-Options": "nosniff",
-    });
+      asset.size,
+      {
+        "Content-Type": contentType,
+        "Cache-Control": cacheControl,
+        ...(asset.etag ? { ETag: asset.etag } : {}),
+        "X-Content-Type-Options": "nosniff",
+      },
+    );
   });
 
   http.route({

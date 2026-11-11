@@ -3,7 +3,11 @@
 // them without importing the HTTP router. MIME and Range helpers live in
 // ../mime/mime.js and are imported from there directly.
 
-import { parseByteRange, rangeErrorHeaders } from "../mime/mime.js";
+import {
+  ifRangeMatches,
+  parseByteRange,
+  unsatisfiableResponse,
+} from "../mime/mime.js";
 
 export function getSetupHtml(): string {
   return `<!DOCTYPE html>
@@ -156,7 +160,9 @@ export function etagMatches(
  * stored file's byte length. `headers` are the full-response headers (type,
  * caching, ETag, ...).
  *
- * The range is resolved against `size` here. Storage answers suffix and
+ * `rangeHeader` and `ifRange` are the raw request headers. A stale If-Range
+ * (checked against `headers.ETag`, as blobResponse does) drops Range and serves
+ * the full body. The range is resolved against `size` here. Storage answers suffix and
  * out-of-bounds ranges with a malformed 206 instead of 416, so only an explicit
  * satisfiable range is forwarded, and Content-Range is built locally. An
  * unknown `size` ignores Range and serves the full body.
@@ -164,19 +170,16 @@ export function etagMatches(
 export async function streamStorageResponse(
   storageUrl: string,
   rangeHeader: string | null,
+  ifRange: string | null,
   size: number | undefined,
   headers: Record<string, string>,
 ): Promise<Response> {
   const range =
-    size === undefined ? null : parseByteRange(rangeHeader, size);
+    size === undefined || !ifRangeMatches(ifRange, headers.ETag)
+      ? null
+      : parseByteRange(rangeHeader, size);
   if (range === "unsatisfiable") {
-    return new Response(null, {
-      status: 416,
-      headers: {
-        ...rangeErrorHeaders(headers),
-        "Content-Range": `bytes */${size}`,
-      },
-    });
+    return unsatisfiableResponse(headers, size!);
   }
 
   const storageResponse = await fetch(

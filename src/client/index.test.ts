@@ -493,7 +493,7 @@ describe("app 404 page upstream failure", () => {
   });
 });
 
-describe("storage-URL Range passthrough", () => {
+describe("storage-URL Range requests", () => {
   const storedFile = {
     storageUrl: "https://storage.example/ep.mp3",
     contentType: "audio/mpeg",
@@ -501,7 +501,7 @@ describe("storage-URL Range passthrough", () => {
     size: 10,
   };
 
-  test("passes a storage 206 through with its Content-Range and Accept-Ranges", async () => {
+  test("forwards an explicit range and serves storage's 206 with Content-Range and Accept-Ranges", async () => {
     const handler = staticHandler();
     const runQuery = vi.fn().mockResolvedValue(storedFile);
     const fetchMock = vi.fn().mockResolvedValue(
@@ -526,34 +526,6 @@ describe("storage-URL Range passthrough", () => {
     expect(await response.text()).toBe("234");
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined;
     expect(new Headers(init?.headers).get("Range")).toBe("bytes=2-4");
-  });
-
-  test("passes a storage 416 through with its Content-Range", async () => {
-    const handler = staticHandler();
-    const runQuery = vi.fn().mockResolvedValue(storedFile);
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(
-        new Response(null, {
-          status: 416,
-          headers: { "Content-Range": "bytes */10" },
-        }),
-      ),
-    );
-
-    const response = await invokeHandler(
-      handler,
-      runQuery,
-      new Request("https://app.convex.site/ep.mp3", {
-        headers: { Range: "bytes=50-" },
-      }),
-    );
-
-    expect(response.status).toBe(416);
-    expect(response.headers.get("Content-Range")).toBe("bytes */10");
-    expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
-    expect(response.headers.get("Cache-Control")).toBe("no-store");
-    expect(response.headers.get("ETag")).toBe('"storage-id"');
   });
 
   test("forwards Range when If-Range matches the current ETag", async () => {
@@ -655,7 +627,32 @@ describe("Range resolution through registerStaticRoutes", () => {
 
     expect(response.status).toBe(416);
     expect(response.headers.get("Content-Range")).toBe("bytes */10");
+    expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(response.headers.get("ETag")).toBe('"storage-id"');
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ["a Range request", { Range: "bytes=2-4" }],
+    ["a full request", {}],
+  ])("a non-2xx storage response to %s is a 500", async (_name, headers) => {
+    const handler = staticHandler();
+    const runQuery = vi.fn().mockResolvedValue(storedFile);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response("unavailable", { status: 503 })),
+    );
+
+    const response = await invokeHandler(
+      handler,
+      runQuery,
+      new Request("https://app.convex.site/ep.mp3", { headers }),
+    );
+
+    expect(response.status).toBe(500);
+    expect(await response.text()).toBe("Storage error");
+    expect(response.headers.get("Content-Type")).toBe("text/plain");
   });
 });
 
@@ -744,7 +741,7 @@ describe("inherited app storage Range handling", () => {
   });
 });
 
-describe("storage passthrough with multi-range headers", () => {
+describe("storage Range requests with multi-range headers", () => {
   test("a multi-range header is not forwarded to storage", async () => {
     const handler = staticHandler();
     const runQuery = vi.fn().mockResolvedValue({
@@ -792,10 +789,10 @@ describe("inherited app storage Range edge cases", () => {
     return (handler as unknown as { _handler: (c: object, r: Request) => Promise<Response> })._handler(ctx, request);
   }
 
-  test("a stale If-Range with Range serves the full body from the blob, not storage", async () => {
+  test("a stale If-Range with Range streams the full body without a Range request", async () => {
     const handler = staticHandler();
     const { storage, runQuery } = inheritedCtx();
-    const fetchMock = vi.fn();
+    const fetchMock = vi.fn().mockResolvedValue(new Response("0123456789"));
     vi.stubGlobal("fetch", fetchMock);
 
     const response = await call(handler, { runQuery, storage }, new Request(
@@ -805,8 +802,10 @@ describe("inherited app storage Range edge cases", () => {
 
     expect(response.status).toBe(200);
     expect(await response.text()).toBe("0123456789");
-    expect(storage.get).toHaveBeenCalledTimes(1);
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined;
+    expect(new Headers(init?.headers).get("Range")).toBeNull();
+    expect(storage.get).not.toHaveBeenCalled();
   });
 
   test.each([

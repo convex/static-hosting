@@ -280,14 +280,17 @@ describe("media serving", () => {
     });
     expect(stale.status).toBe(200);
     expect(await stale.text()).toBe("0123456789");
-    expect(storage).not.toHaveBeenCalled();
+    expect(storage).toHaveBeenCalledTimes(1);
+    expect(
+      new Headers(storage.mock.calls[0]?.[1]?.headers).get("Range"),
+    ).toBeNull();
 
     const current = await t.fetch("/ep2.mp3", {
       headers: { Range: "bytes=2-4", "If-Range": etag },
     });
     expect(current.status).toBe(206);
     expect(await current.text()).toBe("234");
-    expect(storage).toHaveBeenCalledTimes(1);
+    expect(storage).toHaveBeenCalledTimes(2);
   });
 
   test("Range unit names are case-insensitive", async () => {

@@ -124,6 +124,20 @@ export function rangeErrorHeaders(
   };
 }
 
+/** 416 for a Range that starts past the end of a `size`-byte file. */
+export function unsatisfiableResponse(
+  headers: Record<string, string>,
+  size: number,
+): Response {
+  return new Response(null, {
+    status: 416,
+    headers: {
+      ...rangeErrorHeaders(headers),
+      "Content-Range": `bytes */${size}`,
+    },
+  });
+}
+
 /**
  * Build the response for an in-memory blob, honoring a single `Range`
  * request: 206 for a satisfiable range, 416 otherwise, 200 with no range.
@@ -140,13 +154,7 @@ export function blobResponse(
     ? parseByteRange(rangeHeader, blob.size)
     : null;
   if (range === "unsatisfiable") {
-    return new Response(null, {
-      status: 416,
-      headers: {
-        ...rangeErrorHeaders(headers),
-        "Content-Range": `bytes */${blob.size}`,
-      },
-    });
+    return unsatisfiableResponse(headers, blob.size);
   }
   const base = { ...headers, "Accept-Ranges": "bytes" };
   if (range) {
