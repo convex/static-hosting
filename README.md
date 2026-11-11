@@ -351,9 +351,19 @@ should be a real 404, deploy with `--no-spa`:
 npx @convex-dev/static-hosting deploy --no-spa
 ```
 
+Use `--no-spa` for any site that is not a single-page app: a multi-page site, or
+a content site such as podcast audio and Markdown transcripts. Without it, an
+unknown page URL serves your homepage with status 200. With it, unknown URLs
+return 404.
+
 The setting is stored with the deployment, so it travels with the code you ship
 rather than living in a separate env var. Requests for paths with an extension
 (e.g. `/missing.js`) always 404 when not found, regardless of this setting.
+
+To show your own not-found page, upload a `404.html` at the site root. A miss is
+then answered with that page and status 404. Under SPA fallback, extension-less
+paths still serve `index.html`, so the page appears for misses such as
+`/missing.js`. Under `--no-spa`, it appears for every miss.
 
 ## Upgrading from 0.1.x
 

@@ -325,8 +325,9 @@ equivalents: `publicPath` and `assetPrefix`.
 Requests for an extension-less path that doesn't match an uploaded file fall
 back to `index.html`, so client-side routes survive a reload. Paths with an
 extension (e.g. `/missing.js`) always 404 when not found. To turn the fallback
-off for a multi-page app (unknown paths become real 404s), deploy with
-`--no-spa`:
+off for a multi-page or content site (unknown paths become real 404s, which
+is the right choice for a site of podcast audio and Markdown transcripts), deploy
+with `--no-spa`:
 
 ```bash
 npx @convex-dev/static-hosting deploy --no-spa
@@ -336,6 +337,10 @@ npx @convex-dev/static-hosting deploy --no-spa
 The flag is stored on the deployment record (the `deploymentInfo` table), so the
 serving behavior travels with the code you ship rather than living in a separate
 env var. Re-deploy without `--no-spa` or with `--spa` to turn it back on.
+
+Upload a `404.html` at the site root to show your own not-found page. A miss is
+answered with that page and status 404. Under SPA fallback, extension-less paths
+still serve `index.html`; under `--no-spa`, every miss gets the page.
 
 ## Upgrading from 0.1.x
 

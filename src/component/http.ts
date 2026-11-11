@@ -8,6 +8,8 @@ import {
   getSetupHtml,
   resolveContentType,
   isHtmlContentType,
+  NOT_FOUND_PAGE_HEADERS,
+  NOT_FOUND_PAGE_PATH,
 } from "./serving.js";
 
 // CONVEX_SITE_URL reflects the component's mount point (including any httpPrefix).
@@ -47,8 +49,9 @@ const serveStaticFile = httpAction(async (ctx, request) => {
 
   // One query resolves the asset: an exact match, or, when SPA fallback is
   // enabled for the current deployment, the index.html asset for an
-  // extension-less miss. The fallback lookup happens inside the query so the
-  // HTTP action never makes a second round-trip.
+  // extension-less miss. The fallback lookup happens inside the query, so a
+  // hit costs a single round-trip. Only a miss makes a second query, for the
+  // app's 404.html.
   const asset = await ctx.runQuery(internal.lib.resolveAsset, { path });
 
   if (!asset) {
@@ -60,6 +63,18 @@ const serveStaticFile = httpAction(async (ctx, request) => {
           "Cache-Control": "no-store",
           "Retry-After": "5",
         },
+      });
+    }
+    const notFoundPage = await ctx.runQuery(internal.lib.resolveAsset, {
+      path: NOT_FOUND_PAGE_PATH,
+    });
+    const notFoundBlob = notFoundPage?.storageId
+      ? await ctx.storage.get(notFoundPage.storageId)
+      : null;
+    if (notFoundBlob) {
+      return new Response(notFoundBlob, {
+        status: 404,
+        headers: NOT_FOUND_PAGE_HEADERS,
       });
     }
     return new Response("Not Found", {
