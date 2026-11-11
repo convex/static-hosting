@@ -325,8 +325,8 @@ equivalents: `publicPath` and `assetPrefix`.
 Requests for an extension-less path that doesn't match an uploaded file fall
 back to `index.html`, so client-side routes survive a reload. Paths with an
 extension (e.g. `/missing.js`) always 404 when not found. To turn the fallback
-off for a multi-page or content site (unknown paths become real 404s, which
-is the right choice for a site of podcast audio and Markdown transcripts), deploy
+off for a multi-page or content site (unknown paths become real 404s, which is
+the right choice for a site of podcast audio and Markdown transcripts), deploy
 with `--no-spa`:
 
 ```bash

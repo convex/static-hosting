@@ -17,7 +17,12 @@
 }
 
 body {
-  font-family: "Bricolage Grotesque", "DM Sans", system-ui, -apple-system, sans-serif;
+  font-family:
+    "Bricolage Grotesque",
+    "DM Sans",
+    system-ui,
+    -apple-system,
+    sans-serif;
   background: var(--bg-primary);
   color: var(--text-primary);
   line-height: 1.6;
@@ -27,9 +32,17 @@ body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: 
-    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(255, 107, 107, 0.15), transparent),
-    radial-gradient(ellipse 60% 40% at 80% 80%, rgba(99, 102, 241, 0.1), transparent),
+  background:
+    radial-gradient(
+      ellipse 80% 50% at 50% -20%,
+      rgba(255, 107, 107, 0.15),
+      transparent
+    ),
+    radial-gradient(
+      ellipse 60% 40% at 80% 80%,
+      rgba(99, 102, 241, 0.1),
+      transparent
+    ),
     var(--bg-primary);
 }
 
@@ -55,7 +68,11 @@ body {
   font-weight: 700;
   letter-spacing: -0.02em;
   margin-bottom: 0.5rem;
-  background: linear-gradient(135deg, var(--text-primary) 0%, var(--accent) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--text-primary) 0%,
+    var(--accent) 100%
+  );
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -85,9 +102,15 @@ body {
   animation-fill-mode: both;
 }
 
-.card:nth-child(1) { animation-delay: 0.1s; }
-.card:nth-child(2) { animation-delay: 0.2s; }
-.card:nth-child(3) { animation-delay: 0.3s; }
+.card:nth-child(1) {
+  animation-delay: 0.1s;
+}
+.card:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.card:nth-child(3) {
+  animation-delay: 0.3s;
+}
 
 @keyframes fadeInUp {
   from {
@@ -180,12 +203,20 @@ body {
   padding: 1.5rem;
   animation: fadeInUp 0.6s ease-out;
   animation-fill-mode: both;
-  transition: transform 0.2s ease, border-color 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease;
 }
 
-.feature:nth-child(1) { animation-delay: 0.15s; }
-.feature:nth-child(2) { animation-delay: 0.25s; }
-.feature:nth-child(3) { animation-delay: 0.35s; }
+.feature:nth-child(1) {
+  animation-delay: 0.15s;
+}
+.feature:nth-child(2) {
+  animation-delay: 0.25s;
+}
+.feature:nth-child(3) {
+  animation-delay: 0.35s;
+}
 
 .feature:hover {
   transform: translateY(-4px);
