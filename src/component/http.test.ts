@@ -8,11 +8,15 @@ import {
   cacheControlFor,
   decodeRequestPath,
   etagMatches,
-  getMimeType,
   hasFileExtension,
-  resolveContentType,
   isHashedAsset,
 } from "./serving.js";
+import {
+  getMimeType,
+  ifRangeMatches,
+  parseByteRange,
+  resolveContentType,
+} from "../mime/mime.js";
 
 async function storeAsset(
   t: ReturnType<typeof initConvexTest>,
@@ -194,6 +198,64 @@ describe("static file serving", () => {
   });
 });
 
+describe("media serving", () => {
+  test("stored octet-stream mp3 is served as audio/mpeg with range support", async () => {
+    const t = initConvexTest();
+    await storeAsset(
+      t,
+      "/index.html",
+      "<html></html>",
+      "text/html; charset=utf-8",
+    );
+    await storeAsset(t, "/ep1.mp3", "0123456789", "application/octet-stream");
+
+    const full = await t.fetch("/ep1.mp3", {});
+    expect(full.status).toBe(200);
+    expect(full.headers.get("Content-Type")).toBe("audio/mpeg");
+    expect(full.headers.get("Accept-Ranges")).toBe("bytes");
+
+    const part = await t.fetch("/ep1.mp3", { headers: { Range: "bytes=2-4" } });
+    expect(part.status).toBe(206);
+    expect(part.headers.get("Content-Range")).toBe("bytes 2-4/10");
+    expect(await part.text()).toBe("234");
+
+    const bad = await t.fetch("/ep1.mp3", { headers: { Range: "bytes=50-" } });
+    expect(bad.status).toBe(416);
+    expect(bad.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    expect(bad.headers.get("Cache-Control")).toBe("no-store");
+    expect(bad.headers.get("ETag")).toBeTruthy();
+  });
+
+  test("If-Range with a stale validator ignores Range and serves the full body", async () => {
+    const t = initConvexTest();
+    await storeAsset(t, "/ep2.mp3", "0123456789", "application/octet-stream");
+
+    const full = await t.fetch("/ep2.mp3", {});
+    const etag = full.headers.get("ETag")!;
+
+    const stale = await t.fetch("/ep2.mp3", {
+      headers: { Range: "bytes=2-4", "If-Range": '"stale-validator"' },
+    });
+    expect(stale.status).toBe(200);
+    expect(await stale.text()).toBe("0123456789");
+
+    const current = await t.fetch("/ep2.mp3", {
+      headers: { Range: "bytes=2-4", "If-Range": etag },
+    });
+    expect(current.status).toBe(206);
+    expect(await current.text()).toBe("234");
+  });
+
+  test("Range unit names are case-insensitive", async () => {
+    const t = initConvexTest();
+    await storeAsset(t, "/ep3.mp3", "0123456789", "application/octet-stream");
+
+    const res = await t.fetch("/ep3.mp3", { headers: { Range: "Bytes=2-4" } });
+    expect(res.status).toBe(206);
+    expect(res.headers.get("Content-Range")).toBe("bytes 2-4/10");
+  });
+});
+
 describe("serving helpers", () => {
   test("getMimeType maps known extensions and defaults to octet-stream", () => {
     expect(getMimeType("/index.html")).toBe("text/html; charset=utf-8");
@@ -216,6 +278,37 @@ describe("serving helpers", () => {
     );
     expect(resolveContentType("image/png", "/a.mp3")).toBe("image/png");
     expect(resolveContentType(undefined, "/a.mp3")).toBe("audio/mpeg");
+  });
+
+  test("parseByteRange handles ranges", () => {
+    expect(parseByteRange(null, 10)).toBeNull();
+    expect(parseByteRange("bytes=2-4", 10)).toEqual({ start: 2, end: 4 });
+    expect(parseByteRange("bytes=5-", 10)).toEqual({ start: 5, end: 9 });
+    expect(parseByteRange("bytes=-3", 10)).toEqual({ start: 7, end: 9 });
+    expect(parseByteRange("bytes=20-", 10)).toBe("unsatisfiable");
+  });
+
+  test("parseByteRange accepts case-insensitive range unit names", () => {
+    expect(parseByteRange("Bytes=0-1", 10)).toEqual({ start: 0, end: 1 });
+    expect(parseByteRange("BYTES=0-1", 10)).toEqual({ start: 0, end: 1 });
+  });
+
+  test("parseByteRange edge cases", () => {
+    // Open-ended and oversized ends clamp to the body.
+    expect(parseByteRange("bytes=0-", 10)).toEqual({ start: 0, end: 9 });
+    expect(parseByteRange("bytes=0-99999999999", 10)).toEqual({
+      start: 0,
+      end: 9,
+    });
+    // A suffix of zero bytes is unsatisfiable.
+    expect(parseByteRange("bytes=-0", 10)).toBe("unsatisfiable");
+    // Multiple ranges are not supported, so the header is ignored.
+    expect(parseByteRange("bytes=0-1,3-4", 10)).toBeNull();
+    // An inverted range is syntactically invalid. RFC 9110 §14.2 permits
+    // rejecting it with 416, so that behavior is pinned here.
+    expect(parseByteRange("bytes=5-2", 10)).toBe("unsatisfiable");
+    // Any range against an empty body is unsatisfiable.
+    expect(parseByteRange("bytes=0-", 0)).toBe("unsatisfiable");
   });
 
   test("dotfiles and extensionless names keep octet-stream", () => {
@@ -392,5 +485,33 @@ describe("app 404 page fallbacks", () => {
     expect(res.status).toBe(404);
     expect(res.headers.get("Content-Type")).toBe("text/plain");
     expect(await res.text()).toBe("Not Found");
+  });
+});
+
+describe("range header edge cases", () => {
+  test("parseByteRange ignores empty specs and non-bytes units", () => {
+    expect(parseByteRange("bytes=-", 10)).toBeNull();
+    expect(parseByteRange("bytes=", 10)).toBeNull();
+    expect(parseByteRange("items=0-1", 10)).toBeNull();
+  });
+
+  test("ifRangeMatches requires a strong, present, matching validator", () => {
+    expect(ifRangeMatches(null, '"e"')).toBe(true);
+    expect(ifRangeMatches('"e"', '"e"')).toBe(true);
+    expect(ifRangeMatches('W/"e"', '"e"')).toBe(false);
+    expect(ifRangeMatches("Wed, 21 Oct 2015 07:28:00 GMT", '"e"')).toBe(false);
+    expect(ifRangeMatches('"e"', undefined)).toBe(false);
+  });
+});
+
+describe("416 caching", () => {
+  test("an unsatisfiable Range on a hashed asset is never cached as immutable", async () => {
+    const t = initConvexTest();
+    await storeAsset(t, "/assets/index-B71cUw87.js", "console.log(1)", "application/javascript; charset=utf-8");
+
+    const res = await t.fetch("/assets/index-B71cUw87.js", { headers: { Range: "bytes=100-" } });
+    expect(res.status).toBe(416);
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
   });
 });
