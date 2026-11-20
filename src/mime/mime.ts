@@ -63,3 +63,100 @@ export function resolveContentType(
 ): string {
   return stored && stored !== OCTET_STREAM ? stored : getMimeType(path);
 }
+
+/**
+ * Whether a `Range` header should be honored given `If-Range`. RFC 9110
+ * §13.1.5 requires a strong comparison: a missing or weak validator, a
+ * date, or a stale ETag means the full representation is served instead.
+ */
+export function ifRangeMatches(
+  ifRange: string | null,
+  etag: string | null | undefined,
+): boolean {
+  if (ifRange === null) return true;
+  if (!etag) return false;
+  const validator = ifRange.trim();
+  return !validator.startsWith("W/") && validator === etag;
+}
+
+/**
+ * Parse a single-range `Range: bytes=...` header against a body of `size`
+ * bytes. Returns null when the header is absent or not a single byte range
+ * (serve the full body), "unsatisfiable" for a 416, or the inclusive range.
+ * The range unit name is case-insensitive (RFC 9110 §14.1).
+ */
+export function parseByteRange(
+  header: string | null,
+  size: number,
+): { start: number; end: number } | "unsatisfiable" | null {
+  const match = header?.match(/^bytes=(\d*)-(\d*)$/i);
+  if (!match || (match[1] === "" && match[2] === "")) return null;
+  let start: number;
+  let end: number;
+  if (match[1] === "") {
+    const suffix = Number(match[2]);
+    if (suffix === 0) return "unsatisfiable";
+    start = Math.max(0, size - suffix);
+    end = size - 1;
+  } else {
+    start = Number(match[1]);
+    end = match[2] === "" ? size - 1 : Math.min(Number(match[2]), size - 1);
+  }
+  if (start >= size || start > end) return "unsatisfiable";
+  return { start, end };
+}
+
+/**
+ * Headers for a 416. The error is specific to one request, so it must not
+ * inherit the representation's caching policy: a shared cache could keep a
+ * range error under the asset URL and serve it to later valid requests.
+ * ETag and nosniff are kept; Cache-Control is always no-store.
+ */
+export function rangeErrorHeaders(
+  headers: Record<string, string>,
+): Record<string, string> {
+  const keep = ["ETag", "X-Content-Type-Options"];
+  return {
+    ...Object.fromEntries(
+      Object.entries(headers).filter(([name]) => keep.includes(name)),
+    ),
+    "Cache-Control": "no-store",
+  };
+}
+
+/**
+ * Build the response for an in-memory blob, honoring a single `Range`
+ * request: 206 for a satisfiable range, 416 otherwise, 200 with no range.
+ * `headers` are the full-response headers (type, caching, ETag, ...).
+ * `ifRange` is the request's If-Range; a stale validator serves the full body.
+ */
+export function blobResponse(
+  blob: Blob,
+  headers: Record<string, string>,
+  rangeHeader: string | null,
+  ifRange: string | null = null,
+): Response {
+  const range = ifRangeMatches(ifRange, headers.ETag)
+    ? parseByteRange(rangeHeader, blob.size)
+    : null;
+  if (range === "unsatisfiable") {
+    return new Response(null, {
+      status: 416,
+      headers: {
+        ...rangeErrorHeaders(headers),
+        "Content-Range": `bytes */${blob.size}`,
+      },
+    });
+  }
+  const base = { ...headers, "Accept-Ranges": "bytes" };
+  if (range) {
+    return new Response(blob.slice(range.start, range.end + 1), {
+      status: 206,
+      headers: {
+        ...base,
+        "Content-Range": `bytes ${range.start}-${range.end}/${blob.size}`,
+      },
+    });
+  }
+  return new Response(blob, { status: 200, headers: base });
+}

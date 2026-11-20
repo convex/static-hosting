@@ -6,11 +6,11 @@ import {
   decodeRequestPath,
   etagMatches,
   getSetupHtml,
-  resolveContentType,
   isHtmlContentType,
   NOT_FOUND_PAGE_HEADERS,
   NOT_FOUND_PAGE_PATH,
 } from "./serving.js";
+import { blobResponse, resolveContentType } from "../mime/mime.js";
 
 // CONVEX_SITE_URL reflects the component's mount point (including any httpPrefix).
 // We use it to strip the prefix from incoming request paths so lookups in
@@ -137,15 +137,17 @@ const serveStaticFile = httpAction(async (ctx, request) => {
     });
   }
 
-  return new Response(blob, {
-    status: 200,
-    headers: {
+  return blobResponse(
+    blob,
+    {
       "Content-Type": contentType,
       "Cache-Control": cacheControl,
       ETag: etag,
       "X-Content-Type-Options": "nosniff",
     },
-  });
+    request.headers.get("Range"),
+    request.headers.get("If-Range"),
+  );
 });
 
 const http = httpRouter();
