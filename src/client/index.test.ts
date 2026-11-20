@@ -13,7 +13,10 @@ const components = componentsGeneric() as unknown as {
 
 type TestHttpAction = {
   _handler: (
-    ctx: { runQuery: ReturnType<typeof vi.fn> },
+    ctx: {
+      runQuery: ReturnType<typeof vi.fn>;
+      storage?: { get: ReturnType<typeof vi.fn> };
+    },
     request: Request,
   ) => Promise<Response>;
 };
@@ -29,8 +32,9 @@ function invokeHandler(
   handler: object,
   runQuery: ReturnType<typeof vi.fn>,
   request: Request,
+  storage?: { get: ReturnType<typeof vi.fn> },
 ) {
-  return (handler as TestHttpAction)._handler({ runQuery }, request);
+  return (handler as TestHttpAction)._handler({ runQuery, storage }, request);
 }
 
 afterEach(() => {
@@ -435,6 +439,44 @@ describe("app 404 page upstream failure", () => {
       new Request("https://app.convex.site/missing.js"),
     );
 
+    expect(response.status).toBe(404);
+    expect(response.headers.get("Content-Type")).toBe("text/plain");
+    expect(await response.text()).toBe("Not Found");
+  });
+
+  test("a rejected lookup for the 404 page falls back to plain text", async () => {
+    const handler = staticHandler();
+    const runQuery = vi.fn(async (_fn: unknown, args: { path: string }) => {
+      if (args.path === "/404.html") throw new Error("query failed");
+      return null;
+    });
+
+    const response = await invokeHandler(
+      handler,
+      runQuery,
+      new Request("https://app.convex.site/missing.js"),
+    );
+
+    expect(response.status).toBe(404);
+    expect(response.headers.get("Content-Type")).toBe("text/plain");
+    expect(await response.text()).toBe("Not Found");
+  });
+
+  test("a rejected blob read for the 404 page falls back to plain text", async () => {
+    const handler = staticHandler();
+    const runQuery = vi.fn(async (_fn: unknown, args: { path: string }) =>
+      args.path === "/404.html" ? { appStorageId: "legacy-id" } : null,
+    );
+    const get = vi.fn().mockRejectedValue(new Error("storage read failed"));
+
+    const response = await invokeHandler(
+      handler,
+      runQuery,
+      new Request("https://app.convex.site/missing.js"),
+      { get },
+    );
+
+    expect(get).toHaveBeenCalledWith("legacy-id");
     expect(response.status).toBe(404);
     expect(response.headers.get("Content-Type")).toBe("text/plain");
     expect(await response.text()).toBe("Not Found");
