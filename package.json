@@ -92,7 +92,7 @@
     "@vitejs/plugin-react": "6.3.0",
     "chokidar-cli": "3.0.0",
     "convex": "1.50.0",
-    "convex-test": "0.0.71",
+    "convex-test": "0.0.72",
     "cpy-cli": "7.0.0",
     "eslint": "9.39.5",
     "eslint-plugin-react": "7.37.5",
