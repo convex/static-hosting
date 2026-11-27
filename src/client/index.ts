@@ -12,7 +12,8 @@ import {
   getSetupHtml,
   resolveContentType,
   isHtmlContentType,
-  NOT_FOUND_PAGE_HEADERS,
+  appNotFoundPageResponse,
+  plainNotFoundResponse,
   NOT_FOUND_PAGE_PATH,
 } from "../component/serving.js";
 
@@ -102,34 +103,32 @@ export function registerStaticRoutes(
           },
         });
       }
-      const notFoundPage = await ctx.runQuery(
-        component.lib.resolveAssetForHttp,
-        { path: NOT_FOUND_PAGE_PATH },
-      );
-      if (notFoundPage?.appStorageId) {
-        const blob = await ctx.storage.get(
-          notFoundPage.appStorageId as GenericId<"_storage">,
+      try {
+        const notFoundPage = await ctx.runQuery(
+          component.lib.resolveAssetForHttp,
+          { path: NOT_FOUND_PAGE_PATH },
         );
-        if (blob) {
-          return new Response(blob, {
-            status: 404,
-            headers: NOT_FOUND_PAGE_HEADERS,
-          });
+        if (notFoundPage?.appStorageId) {
+          const blob = await ctx.storage.get(
+            notFoundPage.appStorageId as GenericId<"_storage">,
+          );
+          if (blob) return appNotFoundPageResponse(blob);
         }
-      }
-      if (notFoundPage?.storageUrl) {
-        const upstream = await fetch(notFoundPage.storageUrl).catch(() => null);
-        if (upstream?.ok && upstream.body) {
-          return new Response(upstream.body, {
-            status: 404,
-            headers: NOT_FOUND_PAGE_HEADERS,
-          });
+        if (notFoundPage?.storageUrl) {
+          const upstream = await fetch(notFoundPage.storageUrl).catch(
+            () => null,
+          );
+          if (upstream?.ok && upstream.body) {
+            return appNotFoundPageResponse(upstream.body);
+          }
         }
+      } catch (error) {
+        console.warn(
+          "Could not read the app 404 page; serving plain text.",
+          error,
+        );
       }
-      return new Response("Not Found", {
-        status: 404,
-        headers: { "Content-Type": "text/plain" },
-      });
+      return plainNotFoundResponse();
     }
 
     const contentType = resolveContentType(asset.contentType, path);
@@ -181,10 +180,7 @@ export function registerStaticRoutes(
             },
           });
         }
-        return new Response("Not Found", {
-          status: 404,
-          headers: { "Content-Type": "text/plain" },
-        });
+        return plainNotFoundResponse();
       }
       return new Response(blob, {
         status: 200,

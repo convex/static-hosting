@@ -3,7 +3,7 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { internal } from "./_generated/api.js";
 import { initConvexTest } from "./setup.test.js";
-import { getMountPrefix } from "./http.js";
+import http, { getMountPrefix } from "./http.js";
 import {
   cacheControlFor,
   decodeRequestPath,
@@ -309,6 +309,9 @@ describe("app 404 page", () => {
     expect(res.status).toBe(404);
     expect(res.headers.get("Content-Type")).toBe("text/html; charset=utf-8");
     expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    expect(res.headers.get("Cache-Control")).toBe(
+      "public, max-age=0, must-revalidate",
+    );
     expect(await res.text()).toBe("<h1>Gone</h1>");
   });
 
@@ -389,6 +392,56 @@ describe("app 404 page fallbacks", () => {
     });
 
     const res = await t.fetch("/missing.js", {});
+    expect(res.status).toBe(404);
+    expect(res.headers.get("Content-Type")).toBe("text/plain");
+    expect(await res.text()).toBe("Not Found");
+  });
+
+  test("a 404 page whose stored blob was deleted falls back to plain text", async () => {
+    const t = initConvexTest();
+    await storeAsset(
+      t,
+      "/index.html",
+      "<!doctype html>",
+      "text/html; charset=utf-8",
+    );
+    const storageId = await storeAsset(
+      t,
+      "/404.html",
+      "<h1>Gone</h1>",
+      "text/html; charset=utf-8",
+    );
+    await t.run(async (ctx) => {
+      await ctx.storage.delete(storageId);
+    });
+
+    const res = await t.fetch("/missing.js", {});
+    expect(res.status).toBe(404);
+    expect(res.headers.get("Content-Type")).toBe("text/plain");
+    expect(await res.text()).toBe("Not Found");
+  });
+
+  test("a rejected blob read for the 404 page falls back to plain text", async () => {
+    const runQuery = vi.fn(async (_fn: unknown, args: { path: string }) =>
+      args.path === "/404.html" ? { storageId: "blob-404" } : null,
+    );
+    const get = vi.fn().mockRejectedValue(new Error("storage read failed"));
+    const route = http.lookup("/missing.js", "GET");
+    if (!route) throw new Error("no static route registered");
+
+    const res = await (
+      route[0] as unknown as {
+        _handler: (
+          ctx: { runQuery: typeof runQuery; storage: { get: typeof get } },
+          request: Request,
+        ) => Promise<Response>;
+      }
+    )._handler(
+      { runQuery, storage: { get } },
+      new Request("https://app.convex.site/missing.js"),
+    );
+
+    expect(get).toHaveBeenCalledWith("blob-404");
     expect(res.status).toBe(404);
     expect(res.headers.get("Content-Type")).toBe("text/plain");
     expect(await res.text()).toBe("Not Found");

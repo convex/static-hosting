@@ -86,11 +86,24 @@ export function getSetupHtml(): string {
  */
 export const NOT_FOUND_PAGE_PATH = "/404.html";
 
-export const NOT_FOUND_PAGE_HEADERS = {
+const NOT_FOUND_PAGE_HEADERS = {
   "Content-Type": "text/html; charset=utf-8",
-  "Cache-Control": "public, max-age=0, must-revalidate",
+  "Cache-Control": cacheControlFor(NOT_FOUND_PAGE_PATH),
   "X-Content-Type-Options": "nosniff",
 };
+
+export function appNotFoundPageResponse(
+  body: Blob | ReadableStream<Uint8Array>,
+): Response {
+  return new Response(body, { status: 404, headers: NOT_FOUND_PAGE_HEADERS });
+}
+
+export function plainNotFoundResponse(): Response {
+  return new Response("Not Found", {
+    status: 404,
+    headers: { "Content-Type": "text/plain" },
+  });
+}
 
 export function hasFileExtension(path: string): boolean {
   const lastSegment = path.split("/").pop() || "";
